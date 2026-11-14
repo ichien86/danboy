@@ -30,6 +30,19 @@ export function sandiSementara(): string {
   return s.join('');
 }
 
+/**
+ * Sandi awal untuk akun baru dan reset sandi. Bila SANDI_AWAL diatur (di .env, tidak di kode), sandi itu yang dipakai;
+ * bila kosong, dibuat sandi acak. Akun tetap wajib mengganti sandi saat masuk pertama.
+ */
+export function sandiAwal(): { sandi: string; tetap: boolean } {
+  const tetap = process.env.SANDI_AWAL?.trim();
+  if (tetap) {
+    if (tetap.length < 8) throw new Galat('VALIDASI', 'SANDI_AWAL di pengaturan server minimal 8 karakter');
+    return { sandi: tetap, tetap: true };
+  }
+  return { sandi: sandiSementara(), tetap: false };
+}
+
 export interface HasilLogin {
   ok: boolean;
   user?: SessionUser & { wajibGantiSandi: boolean };
@@ -102,7 +115,7 @@ export async function buatPengguna(user: SessionUser, input: z.infer<typeof S.pe
   pastikanBoleh(user, 'kelola_pengguna');
   await sambung();
   if (input.peran === 'skpd' && !(await Skpd.exists({ _id: oid(input.skpdId) }))) throw tidakDitemukan('SKPD');
-  const sandi = sandiSementara();
+  const { sandi, tetap } = sandiAwal();
   const d = await User.create({
     username: input.username.toLowerCase(),
     nama: input.nama,
@@ -116,7 +129,7 @@ export async function buatPengguna(user: SessionUser, input: z.infer<typeof S.pe
   });
   const { passwordHash, ...rest } = d.toObject();
   void passwordHash;
-  return { pengguna: ser(rest), sandiSementara: sandi };
+  return { pengguna: ser(rest), sandiSementara: sandi, sandiTetap: tetap };
 }
 
 export async function ubahPengguna(user: SessionUser, id: string, input: z.infer<typeof S.penggunaUbah>) {
@@ -138,7 +151,7 @@ export async function ubahPengguna(user: SessionUser, id: string, input: z.infer
 export async function resetSandi(user: SessionUser, id: string) {
   pastikanBoleh(user, 'kelola_pengguna');
   await sambung();
-  const sandi = sandiSementara();
+  const { sandi, tetap } = sandiAwal();
   const d = await User.findOneAndUpdate(
     { _id: oid(pastikanId(id, 'Pengguna')) },
     { $set: { passwordHash: await hashSandi(sandi), wajibGantiSandi: true, gagalLogin: 0, terkunciSampai: null } },
@@ -146,7 +159,7 @@ export async function resetSandi(user: SessionUser, id: string) {
   ).lean();
   if (!d) throw tidakDitemukan('Pengguna');
   await catatAudit({ aksi: 'reset_sandi', koleksi: 'user', dokumenId: d._id, userId: user.id });
-  return { sandiSementara: sandi };
+  return { sandiSementara: sandi, sandiTetap: tetap };
 }
 
 export async function statusPengguna(id: string) {

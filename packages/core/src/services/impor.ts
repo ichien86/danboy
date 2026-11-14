@@ -23,7 +23,7 @@ import { GalatFormat, bacaTabel, deteksiJenis } from '@danboy/excel';
 import { barisApbd } from '@danboy/schema';
 import { aksiImpor, pastikanBoleh, type SessionUser } from '../akses';
 import { Galat, tidakDitemukan } from '../galat';
-import { normalisasiKode } from '../kode';
+import { adaDiNomenklatur, normalisasiKode } from '../kode';
 import { banding, kunciSubkegiatan, type Operasi, type Temuan, type Tersimpan } from '../pembanding';
 import { rekapSipd, type BarisTerpetakan } from '../rekap';
 import { parseRupiah } from '../rupiah';
@@ -131,7 +131,7 @@ export async function daftarImpor(user: SessionUser, f: { jenis?: string; tahapa
 export async function statusImpor(
   user: SessionUser,
   batchId: string,
-  f: { bagian?: 'hasil' | 'ditahan' | 'baris'; aturan?: string; page?: number; limit?: number } = {},
+  f: { bagian?: 'hasil' | 'ditahan' | 'baris' | 'diproses' | 'sama'; aturan?: string; page?: number; limit?: number } = {},
 ) {
   pastikanBoleh(user, 'impor');
   await sambung();
@@ -148,9 +148,12 @@ export async function statusImpor(
       HasilBanding.countDocuments(filter),
     ]);
     daftar = { data, total };
-  } else if (f.bagian === 'ditahan' || f.bagian === 'baris') {
+  } else if (f.bagian === 'ditahan' || f.bagian === 'baris' || f.bagian === 'diproses' || f.bagian === 'sama') {
     const filter: Record<string, unknown> = { batchId: batch._id };
     if (f.bagian === 'ditahan') filter.status = 'ditahan';
+    // impor master: baris baru/berubah (diproses) dipisah dari baris yang sama dengan master (dilewati)
+    if (f.bagian === 'diproses') Object.assign(filter, { status: 'ok', 'data.aksi': { $ne: 'sama' } });
+    if (f.bagian === 'sama') Object.assign(filter, { status: 'ok', 'data.aksi': 'sama' });
     if (f.aturan) filter['data.aksi'] = f.aturan;
     const [data, total] = await Promise.all([
       ImporBaris.find(filter).sort({ noBaris: 1 }).skip((page - 1) * limit).limit(limit).lean(),
@@ -376,7 +379,7 @@ export async function prosesApbd(batchId: string) {
               catatan: `di master berada di SKPD ${kodeSkpdPerId.get(su.skpdId) ?? '?'}, di file di SKPD ${kodeSkpd}; data mengikuti master`,
             });
         }
-        if (!kodeNomenklatur.has(kodeSub)) {
+        if (!adaDiNomenklatur(kodeNomenklatur, kodeSub)) {
           catatHilang(hilang.subkegiatan, kodeSub, simpan.namaSubkegiatan as string, pagu);
           rujukan.push('subkegiatan');
         }
@@ -536,6 +539,8 @@ export async function prosesApbd(batchId: string) {
         jumlahSubkegiatanFile: sipd.size,
         jumlahSubkegiatanTersimpan: tersimpan.size,
         operasi: hitungOp,
+        // subkegiatan di file yang isinya sama dengan yang tersimpan: tidak diproses
+        tidakBerubah: Math.max(0, sipd.size - hitungOp.tambah - hitungOp.ubah),
         temuan: hitungAturan,
         tidakAdaPerubahan: hasil.operasi.length === 0,
       },

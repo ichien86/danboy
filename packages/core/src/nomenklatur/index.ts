@@ -33,6 +33,8 @@ export function parseNomenklatur(baris: string[]): { item: ItemNomenklatur[]; ga
   const item: ItemNomenklatur[] = [];
   const galat: { noBaris: number; teks: string }[] = [];
   const terlihat = new Set<string>();
+  // "[URUSAN] URUSAN XX" (tanpa kode): kodenya diambil dari induk bidang urusan berikutnya (X.XX -> X)
+  let urusanTanpaKode: { item: ItemNomenklatur; noBaris: number; teks: string } | null = null;
   baris.forEach((mentah, i) => {
     const teks = String(mentah ?? '').replace(/\s+/g, ' ').trim();
     if (!teks) return;
@@ -54,6 +56,20 @@ export function parseNomenklatur(baris: string[]): { item: ItemNomenklatur[]; ga
     }
     const kode = normalisasiKode(mk[1]);
     const nama = mk[2].trim();
+    if (jenis === 'urusan' && !/^[0-9X]{1,2}$/i.test(kode)) {
+      const it: ItemNomenklatur = { jenis, kode: '', nama: sisa.trim() };
+      item.push(it);
+      urusanTanpaKode = { item: it, noBaris: i + 1, teks };
+      return;
+    }
+    if (jenis === 'bidang' && urusanTanpaKode) {
+      const indukBidang = indukNomenklatur('bidang', kode);
+      if (indukBidang && !terlihat.has(`urusan|${indukBidang}`)) {
+        urusanTanpaKode.item.kode = indukBidang;
+        terlihat.add(`urusan|${indukBidang}`);
+      }
+      urusanTanpaKode = null;
+    }
     if (!jenis) {
       if (!adalahKodeSubkegiatan(kode)) {
         // baris judul/keterangan tanpa kode: lewati diam-diam bila tidak diawali angka
@@ -68,5 +84,8 @@ export function parseNomenklatur(baris: string[]): { item: ItemNomenklatur[]; ga
     const induk = indukNomenklatur(jenis, kode);
     item.push(induk ? { jenis, kode, nama, indukKode: induk } : { jenis, kode, nama });
   });
-  return { item, galat };
+  // urusan tanpa kode yang tidak bisa ditentukan dari bidang di bawahnya dilaporkan sebagai galat
+  const tanpaKode = item.filter((x) => !x.kode);
+  for (const x of tanpaKode) galat.push({ noBaris: 0, teks: `[URUSAN] ${x.nama} (kode urusan tidak bisa ditentukan)` });
+  return { item: item.filter((x) => x.kode), galat };
 }

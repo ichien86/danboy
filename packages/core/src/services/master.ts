@@ -15,7 +15,7 @@ import type { z } from '@danboy/schema';
 import type * as S from '@danboy/schema';
 import { pastikanBoleh, type SessionUser } from '../akses';
 import { Galat, tidakDitemukan } from '../galat';
-import { indukKode, normalisasiKode } from '../kode';
+import { indukKode, kandidatKodeNomenklatur, normalisasiKode } from '../kode';
 import { indukNomenklatur } from '../nomenklatur';
 import { escapeRegex, pastikanId } from './umum';
 
@@ -188,6 +188,9 @@ export async function buatTagging(user: SessionUser, input: z.infer<typeof S.tag
   pastikanBoleh(user, 'kelola_sumber_dana');
   await sambung();
   if (!(await SumberDana.exists({ _id: oid(input.sumberDanaId) }))) throw tidakDitemukan('Sumber dana');
+  const kodeTag = normalisasiKode(input.kodeSubkegiatan);
+  if (!(await Nomenklatur.exists({ kode: { $in: kandidatKodeNomenklatur(kodeTag) }, aktif: true })))
+    throw new Galat('VALIDASI', `Subkegiatan ${kodeTag} tidak ada di master nomenklatur`, { kodeSubkegiatan: 'Tidak ada di master nomenklatur' });
   const d = await Tagging.create({
     ...input,
     kodeSubkegiatan: normalisasiKode(input.kodeSubkegiatan),

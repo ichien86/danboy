@@ -21,6 +21,7 @@ import { dalamCakupan, pastikanBoleh, type SessionUser } from '../akses';
 import { Galat, tidakDitemukan } from '../galat';
 import { hashKomposisi, ikutSipd as hitungIkutSipd, terapkanEditAdmin, urutkan } from '../pembanding';
 import { statusSumberDana, type StatusSumberDana } from '../rekap';
+import { kandidatKodeNomenklatur } from '../kode';
 import { segarkanNotifikasi } from './notifikasi';
 import { ambangMendekati, cakupanDb, escapeRegex, muatTahapan, pastikanId, pastikanTahapanTerbuka } from './umum';
 
@@ -181,8 +182,10 @@ export async function detailSubkegiatan(user: SessionUser, id: string) {
     Skpd.findById(d.skpdId).lean(),
     SubUnit.findById(d.subUnitId).lean(),
     SumberDana.find({ _id: { $in: sdIds.map(oid) } }).lean(),
-    Tagging.find({ tahun: t.tahun, kodeSubkegiatan: d.kodeSubkegiatan }).populate('sumberDanaId', 'kode nama').lean(),
-    Nomenklatur.findOne({ kode: d.kodeSubkegiatan, aktif: true }).lean(),
+    Tagging.find({ tahun: t.tahun, kodeSubkegiatan: { $in: kandidatKodeNomenklatur(d.kodeSubkegiatan) } }).populate('sumberDanaId', 'kode nama').lean(),
+    Nomenklatur.find({ kode: { $in: kandidatKodeNomenklatur(d.kodeSubkegiatan) }, aktif: true })
+      .lean()
+      .then((xs) => xs.sort((a, b) => (a.kode === d.kodeSubkegiatan ? -1 : b.kode === d.kodeSubkegiatan ? 1 : 0))[0] ?? null),
     LogAudit.find({ koleksi: 'subkegiatanTahapan', dokumenId: d._id }).sort({ waktu: -1 }).limit(30).populate('userId', 'nama username').lean(),
     HasilBanding.find({ kunci: `${d.subUnitId}|${d.kodeSubkegiatan}` })
       .select('batchId aturan sebelum sesudah')

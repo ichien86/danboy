@@ -6,11 +6,13 @@ import { Modal, useToast } from '@/components/klien';
 import { Bidang, Masukan, Peringatan, Pilihan, Tombol } from '@/components/ui';
 import { api, GalatApi, pesanGalat } from '@/lib/klien';
 
-function SandiSementara({ sandi, onTutup }: { sandi: string; onTutup: () => void }) {
+function SandiSementara({ sandi, tetap, onTutup }: { sandi: string; tetap?: boolean; onTutup: () => void }) {
   return (
     <div className="space-y-3">
-      <Peringatan nada="aman" judul="Sandi sementara">
-        Berikan sandi ini kepada pengguna secara langsung. Sandi hanya ditampilkan sekali dan wajib diganti saat masuk pertama.
+      <Peringatan nada="aman" judul={tetap ? 'Sandi awal (ditetapkan)' : 'Sandi sementara'}>
+        {tetap
+          ? 'Akun memakai sandi awal yang ditetapkan di pengaturan server. Pengguna wajib menggantinya saat masuk pertama; segera minta pengguna masuk dan mengganti sandi.'
+          : 'Berikan sandi ini kepada pengguna secara langsung. Sandi hanya ditampilkan sekali dan wajib diganti saat masuk pertama.'}
       </Peringatan>
       <p className="select-all rounded-md border border-garis bg-latar px-3 py-2 text-center font-mono text-lg tracking-wider">{sandi}</p>
       <div className="flex justify-end gap-2">
@@ -37,6 +39,7 @@ export function FormPengguna({
   const [galat, setGalat] = useState<Record<string, string>>({});
   const [umum, setUmum] = useState('');
   const [sandi, setSandi] = useState('');
+  const [tetap, setTetap] = useState(false);
   const [memuat, setMemuat] = useState(false);
   const toast = useToast();
   const router = useRouter();
@@ -58,7 +61,7 @@ export function FormPengguna({
       )}
       <Modal buka={buka} setBuka={(b) => (b ? setBuka(true) : tutup())} judul={awal ? `Ubah ${awal.nama}` : 'Tambah pengguna'}>
         {sandi ? (
-          <SandiSementara sandi={sandi} onTutup={tutup} />
+          <SandiSementara sandi={sandi} tetap={tetap} onTutup={tutup} />
         ) : (
           <form
             className="space-y-4"
@@ -76,9 +79,12 @@ export function FormPengguna({
               setGalat({});
               setUmum('');
               try {
-                const r = await api<{ sandiSementara?: string }>(awal ? `/api/pengguna/${awal._id}` : '/api/pengguna', { method: awal ? 'PATCH' : 'POST', body });
+                const r = await api<{ sandiSementara?: string; sandiTetap?: boolean }>(awal ? `/api/pengguna/${awal._id}` : '/api/pengguna', { method: awal ? 'PATCH' : 'POST', body });
                 toast('Pengguna disimpan');
-                if (r.sandiSementara) setSandi(r.sandiSementara);
+                if (r.sandiSementara) {
+                  setTetap(!!r.sandiTetap);
+                  setSandi(r.sandiSementara);
+                }
                 else tutup();
               } catch (err) {
                 if (err instanceof GalatApi && err.detail) setGalat(err.detail);
@@ -137,6 +143,7 @@ export function FormPengguna({
 
 export function ResetSandi({ id, nama }: { id: string; nama: string }) {
   const [sandi, setSandi] = useState('');
+  const [tetap, setTetap] = useState(false);
   const toast = useToast();
   const router = useRouter();
   return (
@@ -147,7 +154,8 @@ export function ResetSandi({ id, nama }: { id: string; nama: string }) {
         onClick={async () => {
           if (!confirm(`Reset kata sandi ${nama}? Pengguna wajib mengganti sandi saat masuk.`)) return;
           try {
-            const r = await api<{ sandiSementara: string }>(`/api/pengguna/${id}/reset-sandi`, { method: 'POST' });
+            const r = await api<{ sandiSementara: string; sandiTetap?: boolean }>(`/api/pengguna/${id}/reset-sandi`, { method: 'POST' });
+            setTetap(!!r.sandiTetap);
             setSandi(r.sandiSementara);
           } catch (e) {
             toast(pesanGalat(e), 'bahaya');
@@ -159,6 +167,7 @@ export function ResetSandi({ id, nama }: { id: string; nama: string }) {
       <Modal buka={!!sandi} setBuka={(b) => !b && (setSandi(''), router.refresh())} judul={`Sandi baru ${nama}`}>
         <SandiSementara
           sandi={sandi}
+          tetap={tetap}
           onTutup={() => {
             setSandi('');
             router.refresh();

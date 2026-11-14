@@ -197,6 +197,10 @@ importers:
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
+    devDependencies:
+      jszip:
+        specifier: ^3.10.1
+        version: 3.10.2
 
   packages/schema:
     dependencies:

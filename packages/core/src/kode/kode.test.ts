@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adalahKodeSubkegiatan, indukKode, normalisasiKode } from './index';
+import { adaDiNomenklatur, adalahKodeSubkegiatan, indukKode, kodeTemplateNomenklatur, normalisasiKode } from './index';
 import { formatRupiah, parseRupiah } from '../rupiah';
 import { rekapSipd, statusSumberDana } from '../rekap';
 import { parseNomenklatur } from '../nomenklatur';
@@ -16,6 +16,16 @@ describe('kode', () => {
   it('induk kode', () => {
     expect(indukKode('2.2.01.07.001.00004')).toBe('2.2.01.07.001');
     expect(indukKode('1')).toBeUndefined();
+  });
+  it('pola X.XX untuk subkegiatan penunjang', () => {
+    expect(kodeTemplateNomenklatur('1.01.01.2.02.0001')).toBe('X.XX.01.2.02.0001');
+    expect(kodeTemplateNomenklatur('5.01.01.2.01.0003')).toBe('X.XX.01.2.01.0003');
+    expect(kodeTemplateNomenklatur('X.XX.01.2.02.0001')).toBeUndefined();
+    expect(kodeTemplateNomenklatur('1.01')).toBeUndefined();
+    const master = new Set(['X.XX.01.2.02.0001', '1.01.02.2.01.0001']);
+    expect(adaDiNomenklatur(master, '1.01.01.2.02.0001')).toBe(true);
+    expect(adaDiNomenklatur(master, '1.01.02.2.01.0001')).toBe(true);
+    expect(adaDiNomenklatur(master, '1.01.02.2.01.0002')).toBe(false);
   });
   it('pola subkegiatan', () => {
     expect(adalahKodeSubkegiatan('1.01.02.2.01.0025')).toBe(true);
@@ -86,6 +96,24 @@ describe('parser nomenklatur', () => {
       ['kegiatan', '1.01.02.2.01', '1.01.02'],
     ]);
     expect(galat).toHaveLength(1);
+  });
+  it('urusan tanpa kode ("[URUSAN] URUSAN XX") mengambil kode dari bidang di bawahnya', () => {
+    const { item, galat } = parseNomenklatur([
+      '[URUSAN] 8 UNSUR PEMERINTAHAN UMUM',
+      '[URUSAN] URUSAN XX',
+      '[BIDANG URUSAN] X.XX URUSAN PEMERINTAHAN BIDANG XX',
+      '[PROGRAM] X.XX.01 PROGRAM PENUNJANG URUSAN PEMERINTAHAN DAERAH KABUPATEN/KOTA',
+      'X.XX.01.2.02.0001 Penyediaan Gaji dan Tunjangan ASN',
+    ]);
+    expect(galat).toEqual([]);
+    expect(item.map((i) => [i.jenis, i.kode, i.indukKode])).toEqual([
+      ['urusan', '8', undefined],
+      ['urusan', 'X', undefined],
+      ['bidang', 'X.XX', 'X'],
+      ['program', 'X.XX.01', 'X.XX'],
+      ['subkegiatan', 'X.XX.01.2.02.0001', 'X.XX.01.2.02'],
+    ]);
+    expect(item[1].nama).toBe('URUSAN XX');
   });
 });
 

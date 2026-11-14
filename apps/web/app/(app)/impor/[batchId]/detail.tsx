@@ -51,7 +51,7 @@ const KEMBALI: Record<string, [string, string]> = {
 export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: string; awal: Batch; bolehKelola: boolean; izin: Izin }) {
   const [bukaKonfirmasi, setBukaKonfirmasi] = useState(false);
   const [b, setB] = useState(awal);
-  const [bagian, setBagian] = useState<'hasil' | 'ditahan' | 'baris'>(awal.jenis === 'apbd' ? 'hasil' : 'baris');
+  const [bagian, setBagian] = useState<'hasil' | 'ditahan' | 'baris' | 'diproses' | 'sama'>(awal.jenis === 'apbd' ? 'hasil' : 'diproses');
   const [aturan, setAturan] = useState('');
   const [page, setPage] = useState(1);
   const [daftar, setDaftar] = useState<Halaman | null>(null);
@@ -139,7 +139,11 @@ export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: str
                 memuat={aksi === 'terapkan'}
                 disabled={!!aksi}
               >
-                {r.tidakAdaPerubahan ? 'Tandai selesai' : `Terapkan ${totalOp ? `${totalOp} perubahan` : ''}`}
+                {r.tidakAdaPerubahan || (!apbd && r.diproses === 0)
+                  ? 'Tandai selesai'
+                  : apbd
+                    ? `Terapkan ${totalOp ? `${totalOp} perubahan` : ''}`
+                    : `Terapkan ${typeof r.diproses === 'number' ? `${r.diproses} baru/berubah` : ''}`}
               </Tombol>
             </>
           ) : b.status === 'gagal' ? (
@@ -196,7 +200,11 @@ export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: str
             <Statistik
               label="Rencana perubahan"
               nilai={totalOp}
-              sub={r.operasi ? `${r.operasi.tambah} baru · ${r.operasi.ubah} ubah · ${r.operasi.tandai_hilang} hilang` : undefined}
+              sub={
+                r.operasi
+                  ? `${r.operasi.tambah} baru · ${r.operasi.ubah} ubah · ${r.operasi.tandai_hilang} hilang${typeof r.tidakBerubah === 'number' ? ` · ${r.tidakBerubah} sama (dilewati)` : ''}`
+                  : undefined
+              }
             />
           </div>
           {r.temuan && Object.keys(r.temuan).length > 0 && (
@@ -223,14 +231,29 @@ export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: str
       {!berjalan && !apbd && b.status !== 'gagal' && (
         <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Statistik label="Jumlah" nilai={String(r.jumlah ?? 0)} sub={r.versi ? `versi ${r.versi}` : r.tahun ? `tahun ${r.tahun}` : undefined} />
-          <Statistik label="Baru" nilai={String(r.baru ?? 0)} />
-          {'berubahNama' in r && <Statistik label="Berubah nama" nilai={String(r.berubahNama ?? 0)} />}
+          <Statistik label="Baru" nilai={String(r.baru ?? 0)} nada={(r.baru as number) ? 'aman' : undefined} />
+          <Statistik
+            label="Berubah"
+            nilai={String(Number(r.berubahNama ?? r.berubah ?? 0) + Number(r.pindahVersi ?? 0))}
+            sub={r.pindahVersi ? `termasuk ${r.pindahVersi} pindah ke versi ${r.versi}` : undefined}
+          />
+          {'sama' in r && <Statistik label="Sama dengan master" nilai={String(r.sama ?? 0)} sub="tidak diproses ulang" />}
           {'tidakAdaLagi' in r && <Statistik label="Tidak ada lagi di file" nilai={String(r.tidakAdaLagi ?? 0)} sub={b.jenis === 'nomenklatur' ? 'akan ditandai nonaktif' : 'tidak diubah'} />}
           {'ditahan' in r && <Statistik label="Ditahan" nilai={String(r.ditahan ?? 0)} nada={(r.ditahan as number) ? 'waspada' : undefined} />}
           {Array.isArray(r.belumDipetakan) && r.belumDipetakan.length > 0 && (
             <div className="col-span-full">
               <Peringatan nada="waspada" judul="Nama tagging belum dipetakan ke sumber dana">
                 {(r.belumDipetakan as string[]).join(', ')}. Isi kolom &quot;nama tagging&quot; di Master Sumber Dana lalu proses ulang.
+              </Peringatan>
+            </div>
+          )}
+          {Array.isArray(r.subkegiatanTidakAda) && r.subkegiatanTidakAda.length > 0 && (
+            <div className="col-span-full">
+              <Peringatan nada="waspada" judul={`Subkegiatan tidak ada di master nomenklatur (${r.subkegiatanTidakAda.length})`}>
+                {(r.subkegiatanTidakAda as string[]).slice(0, 30).join(', ')}
+                {r.subkegiatanTidakAda.length > 30 && ` dan ${r.subkegiatanTidakAda.length - 30} lainnya`}. Barisnya ditahan agar tagging tetap
+                terhubung ke nomenklatur. Minta Super Admin melengkapi Master Nomenklatur, lalu klik Proses ulang. Kode penunjang boleh
+                ditulis dengan urusan SKPD (mis. 1.01.01.2.02.0001) karena dicocokkan dengan pola X.XX.
               </Peringatan>
             </div>
           )}
@@ -242,7 +265,7 @@ export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: str
           padat
           judul={
             <div className="flex flex-wrap gap-1" role="tablist">
-              {(apbd ? (['hasil', 'ditahan'] as const) : (['baris', 'ditahan'] as const)).map((x) => (
+              {(apbd ? (['hasil', 'ditahan'] as const) : (['diproses', 'sama', 'ditahan'] as const)).map((x) => (
                 <button
                   key={x}
                   role="tab"
@@ -254,7 +277,13 @@ export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: str
                   }}
                   className={cx('rounded-md px-2.5 py-1 text-sm', bagian === x ? 'bg-utama-lembut font-medium text-utama' : 'text-redup hover:text-teks')}
                 >
-                  {x === 'hasil' ? 'Perubahan' : x === 'baris' ? 'Isi file' : 'Baris ditahan'}
+                  {x === 'hasil'
+                    ? 'Perubahan'
+                    : x === 'diproses'
+                      ? `Baru / berubah${typeof r.diproses === 'number' ? ` (${r.diproses})` : ''}`
+                      : x === 'sama'
+                        ? `Sama, dilewati${typeof r.sama === 'number' ? ` (${r.sama})` : ''}`
+                        : 'Baris ditahan'}
                 </button>
               ))}
             </div>
@@ -359,7 +388,19 @@ export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: str
               )}
             </>
           ) : (
-            <Kosong judul={bagian === 'ditahan' ? 'Tidak ada baris ditahan' : 'Tidak ada perubahan'} />
+            <Kosong
+              judul={
+                bagian === 'ditahan'
+                  ? 'Tidak ada baris ditahan'
+                  : bagian === 'sama'
+                    ? 'Tidak ada baris yang sama dengan master'
+                    : bagian === 'diproses'
+                      ? 'Tidak ada data baru atau berubah'
+                      : 'Tidak ada perubahan'
+              }
+            >
+              {bagian === 'diproses' && 'Semua isi file sudah sama dengan master; tidak ada yang perlu diimpor.'}
+            </Kosong>
           )}
         </Kartu>
       )}

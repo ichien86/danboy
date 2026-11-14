@@ -30,27 +30,76 @@ function nilaiSel(v: ExcelJS.CellValue): Sel {
   return String(v);
 }
 
+/** Sel yang masih berupa rujukan ke daftar teks bersama yang belum terbaca. */
+const rujukanTeks = (v: ExcelJS.CellValue) => !!v && typeof v === 'object' && 'sharedString' in (v as object);
+
+const ubahBaris = (vals: ExcelJS.CellValue[]): Sel[] => {
+  const out: Sel[] = [];
+  for (let i = 1; i < vals.length; i++) out.push(nilaiSel(vals[i]));
+  return out;
+};
+
+/**
+ * Baca sheet pertama .xlsx. Utamanya secara streaming (hemat memori untuk file SIPD besar). Namun bila daftar teks
+ * bersama (xl/sharedStrings.xml) tersimpan SETELAH lembar data di dalam arsip — umum pada file dari Google Sheets atau
+ * aplikasi selain Excel — pembaca streaming hanya memberi {sharedString: n}. Itu terdeteksi di baris-baris awal, dan
+ * file lalu dibaca utuh (non-streaming) yang selalu benar.
+ */
+async function* bacaXlsx(isi: Buffer): AsyncGenerator<Sel[]> {
+  const PERIKSA = 50;
+  let awal: ExcelJS.CellValue[][] | null = [];
+  let perluUtuh = false;
+  const reader = new ExcelJS.stream.xlsx.WorkbookReader(Readable.from(isi), {
+    sharedStrings: 'cache',
+    hyperlinks: 'ignore',
+    styles: 'ignore',
+    worksheets: 'emit',
+    entries: 'emit',
+  });
+  try {
+    // baris dibaca di DALAM perulangan lembar: keluar dari perulangan lebih dulu akan menutup pembaca streaming
+    for await (const ws of reader) {
+      for await (const row of ws as AsyncIterable<ExcelJS.Row>) {
+        const vals = row.values as ExcelJS.CellValue[];
+        if (vals.some(rujukanTeks)) {
+          if (awal === null) throw new GalatFormat('Isi file .xlsx tidak bisa dibaca dengan benar; simpan ulang dengan Microsoft Excel lalu unggah lagi');
+          perluUtuh = true;
+          break;
+        }
+        if (awal === null) {
+          yield ubahBaris(vals);
+          continue;
+        }
+        // tahan beberapa baris pertama sampai yakin teksnya sudah terbaca
+        awal.push(vals);
+        if (awal.length >= PERIKSA) {
+          for (const v of awal) yield ubahBaris(v);
+          awal = null;
+        }
+      }
+      break; // hanya sheet pertama
+    }
+  } catch (e) {
+    // Pembaca streaming ExcelJS gagal bila workbook.xml tersimpan setelah lembar data (mis. file buatan ExcelJS
+    // atau aplikasi lain). Selama belum ada baris yang diserahkan, aman beralih ke pembacaan utuh.
+    if (awal === null || e instanceof GalatFormat) throw e;
+    perluUtuh = true;
+  }
+  if (perluUtuh) {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(isi as unknown as ArrayBuffer);
+    const ws = wb.worksheets[0];
+    if (!ws) return;
+    for (let r = 1; r <= ws.rowCount; r++) yield ubahBaris(ws.getRow(r).values as ExcelJS.CellValue[]);
+    return;
+  }
+  if (awal) for (const v of awal) yield ubahBaris(v);
+}
+
 /** Baris mentah (array sel) dari file, dibaca secara streaming. */
 export async function* bacaBarisMentah(isi: Buffer, jenis: JenisFile): AsyncGenerator<Sel[]> {
   if (jenis === 'xlsx') {
-    const reader = new ExcelJS.stream.xlsx.WorkbookReader(Readable.from(isi), {
-      sharedStrings: 'cache',
-      hyperlinks: 'ignore',
-      styles: 'ignore',
-      worksheets: 'emit',
-      entries: 'emit',
-    });
-    let pertama = true;
-    for await (const ws of reader) {
-      if (!pertama) break; // hanya sheet pertama
-      pertama = false;
-      for await (const row of ws as AsyncIterable<ExcelJS.Row>) {
-        const vals = row.values as ExcelJS.CellValue[];
-        const out: Sel[] = [];
-        for (let i = 1; i < vals.length; i++) out.push(nilaiSel(vals[i]));
-        yield out;
-      }
-    }
+    yield* bacaXlsx(isi);
     return;
   }
   let teks = isi.toString('utf8');

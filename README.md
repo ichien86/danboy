@@ -35,6 +35,15 @@ Dengan Redis, isi `REDIS_URL` lalu jalankan `pnpm dev:worker`.
 
 `SEED_USERNAME` dan `SEED_PASSWORD` bisa diatur untuk seed; tanpa itu sandi sementara acak dicetak sekali.
 
+## Akun dan sandi awal
+
+Akun baru dan reset sandi memakai **sandi awal**. Bila `SANDI_AWAL` diisi di `.env` (mis. `SANDI_AWAL=…`), semua akun
+baru/reset memakai sandi itu; bila kosong, dibuat sandi acak per akun yang ditampilkan sekali. Apa pun pilihannya, pengguna
+**wajib mengganti sandi saat masuk pertama**, dan sandi baru harus berbeda dari sandi awal serta memenuhi syarat sandi.
+Jangan menulis sandi awal di kode atau dokumen repositori (repositori ini publik); simpan hanya di `.env` server.
+Karena sandi awal yang tetap bisa diketahui orang lain, minta pengguna segera masuk dan mengganti sandinya setelah akun
+dibuat atau direset. Lupa sandi Super Admin: `pnpm akun:reset superadmin`.
+
 ## Database MongoDB
 
 Semua data (master, anggaran per tahapan, file unggahan di GridFS, notifikasi, log audit) disimpan di MongoDB, database

@@ -18,7 +18,7 @@ import {
 } from '@danboy/db';
 import { bacaBarisMentah, deteksiJenis, normalHeader, type Sel } from '@danboy/excel';
 import { Galat } from '../galat';
-import { indukKode, normalisasiKode } from '../kode';
+import { adaDiNomenklatur, indukKode, normalisasiKode } from '../kode';
 import { parseNomenklatur } from '../nomenklatur';
 
 const teks = (v: Sel | undefined) => (v === null || v === undefined ? '' : String(v).replace(/\s+/g, ' ').trim());
@@ -72,16 +72,22 @@ async function prosesNomenklatur(batch: ImporBatchDoc, rows: Sel[][]) {
   const versi = String(batch.ringkasan?.versi || batch.namaFile.replace(/\.(xlsx|csv)$/i, '')).slice(0, 80);
   const { item, galat } = parseNomenklatur(rows.map((r) => r.filter((c) => c !== null && String(c).trim() !== '').join(' ')));
   if (!item.length) throw new Galat('FORMAT_FILE', 'Tidak ada baris nomenklatur yang dikenali');
-  const aktif = await Nomenklatur.find({ aktif: true }).select('kode nama jenis').lean<NomenklaturDoc[]>();
+  const aktif = await Nomenklatur.find({ aktif: true }).select('kode nama jenis indukKode versi').lean<NomenklaturDoc[]>();
   const aktifPer = new Map(aktif.map((n) => [n.kode, n]));
   const diFile = new Set(item.map((i) => i.kode));
   let baru = 0;
   let berubahNama = 0;
+  let pindahVersi = 0;
+  let sama = 0;
   const baris = item.map((it, i) => {
     const lama = aktifPer.get(it.kode);
-    const aksi = !lama ? 'baru' : lama.nama !== it.nama ? 'berubah_nama' : 'sama';
+    const isiSama = !!lama && lama.nama === it.nama && lama.jenis === it.jenis && (lama.indukKode ?? undefined) === (it.indukKode ?? undefined);
+    // versi lain dengan isi sama tetap ditulis ke versi baru; versi sama dengan isi sama dilewati
+    const aksi = !lama ? 'baru' : !isiSama ? 'berubah_nama' : lama.versi !== versi ? 'pindah_versi' : 'sama';
     if (aksi === 'baru') baru++;
-    if (aksi === 'berubah_nama') berubahNama++;
+    else if (aksi === 'berubah_nama') berubahNama++;
+    else if (aksi === 'pindah_versi') pindahVersi++;
+    else sama++;
     return { noBaris: i + 1, data: { ...it, aksi, namaLama: lama?.nama }, status: 'ok' as const };
   });
   const hilang = aktif.filter((n) => !diFile.has(n.kode));
@@ -89,7 +95,7 @@ async function prosesNomenklatur(batch: ImporBatchDoc, rows: Sel[][]) {
   await simpanBaris(batch._id, baris as never);
   const perJenis: Record<string, number> = {};
   for (const it of item) perJenis[it.jenis] = (perJenis[it.jenis] ?? 0) + 1;
-  return { versi, jumlah: item.length, perJenis, baru, berubahNama, tidakAdaLagi: hilang.length, contohTidakAdaLagi: hilang.slice(0, 20).map((h) => `${h.kode} ${h.nama}`), barisGagal: galat.length };
+  return { versi, jumlah: item.length, perJenis, baru, berubahNama, pindahVersi, sama, diproses: item.length - sama, tidakAdaLagi: hilang.length, contohTidakAdaLagi: hilang.slice(0, 20).map((h) => `${h.kode} ${h.nama}`), barisGagal: galat.length };
 }
 
 async function prosesKodeNama(batch: ImporBatchDoc, rows: Sel[][]) {
@@ -108,6 +114,7 @@ async function prosesKodeNama(batch: ImporBatchDoc, rows: Sel[][]) {
   const lihat = new Set<string>();
   let baru = 0;
   let berubahNama = 0;
+  let sama = 0;
   const baris: { noBaris: number; data: Record<string, unknown>; status: 'ok' | 'ditahan'; alasan?: string }[] = [];
   rows.slice(mulai).forEach((r, i) => {
     const kode = teks(r[iKode]).replace(/\s/g, '');
@@ -122,12 +129,13 @@ async function prosesKodeNama(batch: ImporBatchDoc, rows: Sel[][]) {
     const lama = ada.get(kode);
     const aksi = lama === undefined ? 'baru' : lama !== nama ? 'berubah_nama' : 'sama';
     if (aksi === 'baru') baru++;
-    if (aksi === 'berubah_nama') berubahNama++;
+    else if (aksi === 'berubah_nama') berubahNama++;
+    else sama++;
     baris.push({ noBaris: i + 1 + mulai, data: { kode, nama, indukKode: indukKode(kode), aksi, namaLama: lama }, status: 'ok' });
   });
   if (!lihat.size) throw new Galat('FORMAT_FILE', 'Tidak ada baris kode dan nama yang valid');
   await simpanBaris(batch._id, baris);
-  return { jumlah: lihat.size, baru, berubahNama, tidakAdaLagi: [...ada.keys()].filter((k) => !lihat.has(k)).length, barisGagal: baris.filter((b) => b.status === 'ditahan').length };
+  return { jumlah: lihat.size, baru, berubahNama, sama, diproses: lihat.size - sama, tidakAdaLagi: [...ada.keys()].filter((k) => !lihat.has(k)).length, barisGagal: baris.filter((b) => b.status === 'ditahan').length };
 }
 
 async function prosesTagging(batch: ImporBatchDoc, rows: Sel[][]) {
@@ -159,9 +167,17 @@ async function prosesTagging(batch: ImporBatchDoc, rows: Sel[][]) {
       peta.set(key, [...(peta.get(key) ?? []), String(s._id)]);
     }
   }
-  const ada = new Set(
-    (await Tagging.find({ tahun }).select('sumberDanaId kodeSubkegiatan rincian').lean()).map((t) => `${t.sumberDanaId}|${t.kodeSubkegiatan}|${t.rincian}`),
+  const isiTag = (t: { kategori?: string | null; kinerja?: string | null; indikator?: string | null; satuan?: string | null }) =>
+    JSON.stringify([t.kategori ?? '', t.kinerja ?? '', t.indikator ?? '', t.satuan ?? '']);
+  const ada = new Map(
+    (await Tagging.find({ tahun }).select('sumberDanaId kodeSubkegiatan rincian kategori kinerja indikator satuan').lean()).map((t) => [
+      `${t.sumberDanaId}|${t.kodeSubkegiatan}|${t.rincian}`,
+      isiTag(t),
+    ]),
   );
+  let berubah = 0;
+  const kodeNomenklatur = new Set((await Nomenklatur.find({ aktif: true }).select('kode').lean()).map((n) => n.kode));
+  const subkegiatanAsing = new Set<string>();
   const belumDipetakan = new Set<string>();
   let baru = 0;
   let sama = 0;
@@ -186,18 +202,35 @@ async function prosesTagging(batch: ImporBatchDoc, rows: Sel[][]) {
       baris.push({ noBaris, data: { ...data, aksi: 'galat' }, status: 'ditahan', alasan: 'Kode subkegiatan kosong' });
       return;
     }
+    // semua masalah satu baris dilaporkan sekaligus
+    const masalah: string[] = [];
+    if (!adaDiNomenklatur(kodeNomenklatur, kode)) {
+      subkegiatanAsing.add(kode);
+      masalah.push(`subkegiatan ${kode} tidak ada di master nomenklatur`);
+    }
     if (!ids?.length) {
       belumDipetakan.add(namaTagging);
-      baris.push({ noBaris, data: { ...data, aksi: 'ditahan' }, status: 'ditahan', alasan: `Nama tagging "${namaTagging}" belum dipetakan ke sumber dana` });
+      masalah.push(`nama tagging "${namaTagging}" belum dipetakan ke sumber dana`);
+    }
+    if (masalah.length) {
+      const alasan = masalah.join('; ');
+      baris.push({ noBaris, data: { ...data, aksi: 'ditahan' }, status: 'ditahan', alasan: alasan[0].toUpperCase() + alasan.slice(1) });
       return;
     }
-    const semuaAda = ids.every((id) => ada.has(`${id}|${kode}|${data.rincian}`));
-    if (semuaAda) sama++;
-    else baru++;
-    baris.push({ noBaris, data: { ...data, sumberDanaIds: ids, aksi: semuaAda ? 'sama' : 'baru' }, status: 'ok' });
+    if (!ids) return;
+    const isi = isiTag(data);
+    const status = ids.map((id) => {
+      const lama = ada.get(`${id}|${kode}|${data.rincian}`);
+      return lama === undefined ? 'baru' : lama !== isi ? 'berubah' : 'sama';
+    });
+    const aksi = status.includes('baru') ? 'baru' : status.includes('berubah') ? 'berubah' : 'sama';
+    if (aksi === 'baru') baru++;
+    else if (aksi === 'berubah') berubah++;
+    else sama++;
+    baris.push({ noBaris, data: { ...data, sumberDanaIds: ids, aksi }, status: 'ok' });
   });
   await simpanBaris(batch._id, baris);
-  return { tahun, jumlah: baris.length, baru, sama, ditahan: baris.filter((b) => b.status === 'ditahan').length, belumDipetakan: [...belumDipetakan].sort() };
+  return { tahun, jumlah: baris.length, baru, berubah, sama, diproses: baru + berubah, ditahan: baris.filter((b) => b.status === 'ditahan').length, belumDipetakan: [...belumDipetakan].sort(), subkegiatanTidakAda: [...subkegiatanAsing].sort() };
 }
 
 /**
@@ -238,12 +271,14 @@ async function prosesPerangkatDaerah(batch: ImporBatchDoc, rows: Sel[][]) {
   if (!skpd.size) throw new Galat('FORMAT_FILE', 'Tidak ada baris perangkat daerah yang valid');
   let baru = 0;
   let berubah = 0;
+  let sama = 0;
   const baris: { noBaris: number; data: Record<string, unknown>; status: 'ok' | 'ditahan'; alasan?: string }[] = [];
   for (const [kode, v] of skpd) {
     const lama = skpdAda.get(kode);
     const aksi = !lama ? 'baru' : lama.nama !== v.nama ? 'berubah_nama' : 'sama';
     if (aksi === 'baru') baru++;
-    if (aksi === 'berubah_nama') berubah++;
+    else if (aksi === 'berubah_nama') berubah++;
+    else sama++;
     baris.push({ noBaris: v.noBaris, data: { tipe: 'skpd', kode, nama: v.nama, aksi, namaLama: lama?.nama }, status: 'ok' });
   }
   for (const [kode, v] of su) {
@@ -251,14 +286,15 @@ async function prosesPerangkatDaerah(batch: ImporBatchDoc, rows: Sel[][]) {
     const pindah = lama && kodeSkpdPerId.get(String(lama.skpdId)) !== v.kodeSkpd;
     const aksi = !lama ? 'baru' : pindah ? 'pindah_skpd' : lama.nama !== v.nama ? 'berubah_nama' : 'sama';
     if (aksi === 'baru') baru++;
-    if (aksi === 'berubah_nama' || aksi === 'pindah_skpd') berubah++;
+    else if (aksi === 'berubah_nama' || aksi === 'pindah_skpd') berubah++;
+    else sama++;
     baris.push({ noBaris: v.noBaris + 0.5, data: { tipe: 'sub_unit', kode, nama: v.nama, kodeSkpd: v.kodeSkpd, aksi, namaLama: lama?.nama }, status: 'ok' });
   }
   baris.sort((a, b) => a.noBaris - b.noBaris);
   baris.forEach((b, i) => (b.noBaris = i + 1));
   galat.forEach((g, i) => (g.noBaris = 100000 + i));
   await simpanBaris(batch._id, [...baris, ...galat]);
-  return { jumlahSkpd: skpd.size, jumlahSubUnit: su.size, jumlah: skpd.size + su.size, baru, berubahNama: berubah, ditahan: galat.length };
+  return { jumlahSkpd: skpd.size, jumlahSubUnit: su.size, jumlah: skpd.size + su.size, baru, berubahNama: berubah, sama, diproses: baru + berubah, ditahan: galat.length };
 }
 
 async function terapkanPerangkatDaerah(b: ImporBatchDoc, session: import('mongoose').ClientSession) {
@@ -308,7 +344,7 @@ export async function terapkanMaster(batchId: string) {
       const versi = String(b.ringkasan?.versi ?? '');
       for await (const r of cursor) {
         const d = r.data as Record<string, unknown>;
-        if (d.aksi === 'sama' && b.jenis !== 'nomenklatur') continue;
+        if (d.aksi === 'sama') continue; // data sama dengan master: tidak ditulis ulang
         n++;
         if (b.jenis === 'nomenklatur') {
           ops.push({
@@ -341,6 +377,8 @@ export async function terapkanMaster(batchId: string) {
       if (b.jenis === 'nomenklatur') {
         // yang tidak ada lagi ditandai aktif:false (tidak dihapus; mungkin masih dipakai tahapan lama)
         await Nomenklatur.updateMany({ versi: { $ne: versi }, aktif: true }, { $set: { aktif: false } }, { session });
+        const kodeFile = (await ImporBaris.find({ batchId: b._id, status: 'ok' }).select('data.kode').session(session).lean()).map((x) => (x.data as { kode: string }).kode);
+        await Nomenklatur.updateMany({ versi, aktif: true, kode: { $nin: kodeFile } }, { $set: { aktif: false } }, { session });
       }
       await catatAudit({ aksi: 'terapkan_impor', koleksi: b.jenis === 'sumber_dana' ? 'sumberDana' : b.jenis, dokumenId: b._id, sesudah: { namaFile: b.namaFile, jumlah: n, versi: versi || undefined } }, session);
     });

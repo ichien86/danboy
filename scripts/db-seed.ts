@@ -15,7 +15,7 @@ await Promise.all(semuaModel.map((m) => m.createIndexes()));
 const username = process.env.SEED_USERNAME ?? 'superadmin';
 let sa = await User.findOne({ username }).lean();
 if (!sa) {
-  const sandi = process.env.SEED_PASSWORD ?? svc.sandiSementara();
+  const sandi = process.env.SEED_PASSWORD ?? svc.sandiAwal().sandi;
   const u = await User.create({ username, nama: 'Super Admin', peran: 'super_admin', passwordHash: await svc.hashSandi(sandi), wajibGantiSandi: true });
   sa = u.toObject();
   console.log('Akun Super Admin dibuat.');

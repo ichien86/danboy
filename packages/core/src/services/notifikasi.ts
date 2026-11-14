@@ -16,6 +16,7 @@ import {
   type TingkatNotifikasi,
 } from '@danboy/db';
 import { formatRupiah } from '../rupiah';
+import { kandidatKodeNomenklatur } from '../kode';
 import { pastikanBoleh, type SessionUser } from '../akses';
 import { Galat, tidakDitemukan } from '../galat';
 import { cakupanDb, pastikanId, type Halaman } from './umum';
@@ -104,7 +105,7 @@ export async function segarkanNotifikasi(tahapanId: unknown, session?: ClientSes
     for (const a of d.alokasi) {
       const sd = sdPer.get(String(a.sumberDanaId));
       if (!sd?.khusus || a.nilai === 0) continue;
-      if (tagged.has(`${a.sumberDanaId}|${d.kodeSubkegiatan}`)) continue;
+      if (kandidatKodeNomenklatur(d.kodeSubkegiatan).some((k) => tagged.has(`${a.sumberDanaId}|${k}`))) continue;
       calon.push({
         kunciUnik: `R5:${t}:${id}:${a.sumberDanaId}`,
         aturan: 'R5',

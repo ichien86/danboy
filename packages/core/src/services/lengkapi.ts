@@ -1,7 +1,7 @@
 import { ImporBatch, ImporBaris, Nomenklatur, Skpd, SubUnit, SumberDana, catatAudit, oid, sambung, type ImporBatchDoc } from '@danboy/db';
 import { pastikanBoleh, type Aksi, type SessionUser } from '../akses';
 import { Galat, tidakDitemukan } from '../galat';
-import { indukKode } from '../kode';
+import { adaDiNomenklatur, indukKode } from '../kode';
 import { indukNomenklatur, type JenisNomenklatur } from '../nomenklatur';
 import { tambahJob } from './antrean';
 import { pastikanId } from './umum';
@@ -71,6 +71,7 @@ async function lengkapiNomenklatur(b: ImporBatchDoc, ditahan: DataBaris[]) {
   const dibuat = new Map<string, { jenis: JenisNomenklatur; kode: string; nama: string; indukKode?: string }>();
   const kurang: string[] = [];
   for (const kodeSub of new Set(ditahan.map((d) => String(d.kodeSubkegiatan)))) {
+    if (adaDiNomenklatur(aktif, kodeSub)) continue;
     let kode: string | undefined = kodeSub;
     for (const jenis of urutan) {
       if (!kode || aktif.has(kode) || dibuat.has(kode)) break;

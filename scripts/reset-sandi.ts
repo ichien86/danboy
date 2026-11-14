@@ -6,7 +6,7 @@
  */
 import './env';
 import { User, catatAudit, putus, sambung } from '@danboy/db';
-import { hashSandi, sandiSementara } from '@danboy/core/services';
+import { hashSandi, sandiAwal } from '@danboy/core/services';
 
 const username = (process.argv[2] ?? '').toLowerCase().trim();
 if (!username) {
@@ -21,7 +21,7 @@ if (!u) {
   await putus();
   process.exit(1);
 }
-const sandi = sandiSementara();
+const { sandi } = sandiAwal();
 await User.updateOne(
   { _id: u._id },
   { $set: { passwordHash: await hashSandi(sandi), wajibGantiSandi: true, gagalLogin: 0, terkunciSampai: null, aktif: true } },

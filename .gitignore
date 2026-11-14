@@ -12,3 +12,5 @@ deploy/mongo-keyfile
 *.tsbuildinfo
 deploy/letsencrypt/
 deploy/*.log
+# berkas data kerja (tidak ikut repositori publik)
+publik/
