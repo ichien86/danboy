@@ -22,6 +22,7 @@ if [ ! -f .env ]; then
     -e "s|^MONGO_APP_PASSWORD=.*|MONGO_APP_PASSWORD=$(acak 24)|" \
     -e "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=$(acak 24)|" \
     -e "s|^TLS_DIR=.*|TLS_DIR=./tls|" \
+    -e "s|^TUJUAN_CADANGAN=.*|TUJUAN_CADANGAN=${TUJUAN_CADANGAN:-/opt/danboy-cadangan}|" \
     .env
   chmod 600 .env
   echo "deploy/.env dibuat dengan rahasia acak (simpan salinannya di tempat aman)."
@@ -62,6 +63,14 @@ docker compose --env-file .env run --rm worker node_modules/.bin/tsx scripts/db-
 echo "Akun Super Admin (sandi sementara hanya ditampilkan sekali):"
 docker compose --env-file .env run --rm worker node_modules/.bin/tsx scripts/db-seed.ts
 
+if command -v crontab >/dev/null; then
+  BARIS="0 1 * * * cd $PWD && bash cadangan.sh >> $PWD/cadangan.log 2>&1"
+  ( crontab -l 2>/dev/null | grep -v 'cadangan.sh' ; echo "$BARIS" ) | crontab -
+  echo "Cadangan harian 01.00 WIB dijadwalkan ke $(grep '^TUJUAN_CADANGAN=' .env | cut -d= -f2-)."
+fi
+
 echo
 echo "Selesai. Buka $(grep '^AUTH_URL=' .env | cut -d= -f2-) dan masuk sebagai superadmin."
+echo "Sertifikat saat ini self-signed (browser akan memperingatkan). Pasang sertifikat resmi gratis:"
+echo "  bash deploy/sertifikat.sh <domain> [email]"
 echo "Cek kesehatan: curl -k $(grep '^AUTH_URL=' .env | cut -d= -f2-)/api/kesehatan"

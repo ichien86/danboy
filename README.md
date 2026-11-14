@@ -53,6 +53,8 @@ tahapan ditutup selalu ditolak 423.
 `docker compose`, port 80/443 terbuka, dan nama domain yang mengarah ke server. Image `mongo:8.0` butuh CPU dengan AVX;
 pada server lama tanpa AVX, ganti ke `mongo:4.4` di `deploy/docker-compose.yml`.
 
+Panduan lengkap hosting gratis di Oracle Cloud (membuat VM, subdomain, HTTPS): [deploy/HOSTING-ORACLE.md](deploy/HOSTING-ORACLE.md).
+
 **Pemasangan pertama** (database dimulai kosong; data contoh di komputer pengembangan tidak ikut):
 
 ```bash
