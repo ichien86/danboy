@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { mongoose, sambung } from '@danboy/db';
+import { infoServer } from '@danboy/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,9 +7,12 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const hasil: Record<string, string> = {};
   try {
-    await sambung();
-    await mongoose.connection.db!.admin().ping();
+    const info = await infoServer();
     hasil.mongodb = 'ok';
+    hasil.mongodbVersi = info.versi;
+    hasil.database = info.database;
+    // transaksi butuh replica set; tanpa itu impor dan keputusan Admin akan gagal
+    hasil.replicaSet = info.replicaSet ?? 'gagal: MongoDB bukan replica set (jalankan mongod dengan --replSet)';
   } catch {
     hasil.mongodb = 'gagal';
   }
@@ -26,6 +29,6 @@ export async function GET() {
       hasil.redis = 'gagal';
     }
   } else hasil.antrean = 'in-process';
-  const sehat = !Object.values(hasil).includes('gagal');
+  const sehat = !Object.values(hasil).some((v) => v.startsWith('gagal'));
   return NextResponse.json({ status: sehat ? 'sehat' : 'terganggu', ...hasil }, { status: sehat ? 200 : 503 });
 }

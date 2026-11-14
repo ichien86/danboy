@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
-import { boleh } from '@danboy/core';
+import { aksiImpor, boleh } from '@danboy/core';
 import { statusImpor } from '@danboy/core/services';
 import { wajibSesi } from '@/lib/sesi';
 import { DetailImpor } from './detail';
@@ -14,5 +14,10 @@ export default async function HalamanDetailImpor({ params }: { params: Promise<{
   const awal = await statusImpor(user, batchId).catch(() => null);
   if (!awal) notFound();
   if ((awal.batch as { jenis?: string }).jenis === 'verifikasi') redirect(`/verifikasi/${batchId}`);
-  return <DetailImpor batchId={batchId} awal={awal.batch as never} />;
+  const jenis = (awal.batch as { jenis: string }).jenis;
+  return (
+    <DetailImpor batchId={batchId} awal={awal.batch as never} bolehKelola={boleh(user, aksiImpor(jenis))}
+      izin={{ nomenklatur: boleh(user, 'kelola_nomenklatur'), sumberDana: boleh(user, 'kelola_sumber_dana'), skpd: boleh(user, 'kelola_skpd') }}
+    />
+  );
 }

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { formatRupiah } from '@danboy/core';
 import { daftarNotifikasi, ringkasanDasbor } from '@danboy/core/services';
-import { Rupiah, StatusSumberDana, StatusTahapan, TingkatNotifikasi, tanggal } from '@/components/domain';
+import { LABEL_ATURAN, Rupiah, StatusSumberDana, StatusTahapan, TingkatNotifikasi, tanggal } from '@/components/domain';
 import { Kartu, KepalaHalaman, Kosong, Peringatan, Statistik, Tabel, TD, TH, TautanTombol } from '@/components/ui';
 import { konteksHalaman, TanpaTahapan, type SP } from '@/lib/halaman';
 import { GrafikPagu } from './grafik';
@@ -83,7 +83,7 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
                 <li key={n._id} className="px-4 py-2.5">
                   <div className="flex items-center gap-2">
                     <TingkatNotifikasi tingkat={n.tingkat} />
-                    <span className="text-xs text-redup">{n.aturan}</span>
+                    <span className="text-xs text-redup">{LABEL_ATURAN[n.aturan] ?? n.aturan}</span>
                   </div>
                   {n.tautan ? (
                     <Link href={n.tautan} className="mt-1 block text-sm hover:underline">

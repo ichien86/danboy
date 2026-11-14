@@ -26,7 +26,7 @@ export default async function DetailSumberDana({ params, searchParams }: { param
   const tahun = num(sp.tahun, tahapan?.tahun ?? new Date().getFullYear());
   const sd = await detailSumberDana(user, decodeURIComponent(kode), tahun).catch(() => null);
   if (!sd) notFound();
-  const kelola = boleh(user, 'kelola_master');
+  const kelola = boleh(user, 'kelola_sumber_dana');
   const tagging = sd.tagging as unknown as Tag[];
 
   return (

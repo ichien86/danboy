@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { boleh } from '@danboy/core';
-import { daftarSkpd } from '@danboy/core/services';
+import { batasUnggahMb, daftarSkpd } from '@danboy/core/services';
+import { TombolImpor } from '@/components/impor';
+import { RiwayatImpor } from '@/components/riwayat-impor';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Masukan, Tombol } from '@/components/ui';
 import { konteksHalaman, type SP } from '@/lib/halaman';
 import { FormUnit } from './form';
@@ -17,13 +19,23 @@ interface Unit {
 
 export default async function MasterSkpd({ searchParams }: { searchParams: SP }) {
   const { user, sp } = await konteksHalaman(searchParams);
-  if (!boleh(user, 'kelola_master')) redirect('/dasbor');
+  if (user.peran === 'skpd') redirect('/dasbor');
+  const kelola = boleh(user, 'kelola_skpd');
   const data = (await daftarSkpd(user, { q: sp.q })) as unknown as (Unit & { subUnit: Unit[] })[];
   return (
     <>
-      <KepalaHalaman judul="Master SKPD dan sub unit" sub={`${data.length} SKPD · SKPD dan sub unit baru juga dibuat otomatis saat impor APBD`} aksi={<FormUnit />} />
+      <KepalaHalaman judul="Perangkat daerah (SKPD dan sub unit)" sub={`${data.length} SKPD${kelola ? "" : " · dikelola oleh Super Admin"}`}
+        aksi={
+          kelola ? (
+            <>
+              <TombolImpor jenis="skpd" label="Impor perangkat daerah" batasMb={batasUnggahMb()} />
+              <FormUnit />
+            </>
+          ) : undefined
+        }
+      />
       <form method="get" className="mb-3 flex gap-2">
-        <Masukan name="q" defaultValue={sp.q} placeholder="Cari kode atau nama SKPD" className="max-w-sm" aria-label="Cari SKPD" />
+        <Masukan name="q" data-cari defaultValue={sp.q} placeholder="Cari kode atau nama SKPD  (tekan /)" className="max-w-sm" aria-label="Cari SKPD" />
         <Tombol type="submit">Cari</Tombol>
       </form>
       {data.length ? (
@@ -40,10 +52,12 @@ export default async function MasterSkpd({ searchParams }: { searchParams: SP })
                 </span>
               }
               aksi={
-                <div className="flex gap-1">
-                  <FormUnit awal={s} />
-                  <FormUnit skpdId={s._id} />
-                </div>
+                kelola ? (
+                  <div className="flex gap-1">
+                    <FormUnit awal={s} />
+                    <FormUnit skpdId={s._id} />
+                  </div>
+                ) : undefined
               }
             >
               <ul className="divide-y divide-garis">
@@ -52,7 +66,7 @@ export default async function MasterSkpd({ searchParams }: { searchParams: SP })
                     <span className="font-mono text-xs text-redup">{u.kode}</span>
                     <span className="flex-1">{u.nama}</span>
                     {!u.aktif && <Lencana>nonaktif</Lencana>}
-                    <FormUnit awal={u} subUnit />
+                    {kelola && <FormUnit awal={u} subUnit />}
                   </li>
                 ))}
                 {!s.subUnit.length && <li className="px-4 py-2 text-sm text-redup">Belum ada sub unit</li>}
@@ -65,6 +79,7 @@ export default async function MasterSkpd({ searchParams }: { searchParams: SP })
           <Kosong judul="Belum ada SKPD" />
         </Kartu>
       )}
+      {kelola && <RiwayatImpor user={user} jenis="skpd" />}
     </>
   );
 }

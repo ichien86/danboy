@@ -1,5 +1,6 @@
 import {
   Nomenklatur,
+  Rekening,
   PaguSumberDana,
   Skpd,
   SubUnit,
@@ -15,6 +16,7 @@ import type * as S from '@danboy/schema';
 import { pastikanBoleh, type SessionUser } from '../akses';
 import { Galat, tidakDitemukan } from '../galat';
 import { indukKode, normalisasiKode } from '../kode';
+import { indukNomenklatur } from '../nomenklatur';
 import { escapeRegex, pastikanId } from './umum';
 
 const ser = <T>(x: T): T => JSON.parse(JSON.stringify(x));
@@ -37,13 +39,13 @@ export async function daftarSkpd(user: SessionUser, opsi: { q?: string } = {}) {
 }
 
 export async function buatSkpd(user: SessionUser, input: z.infer<typeof S.skpdInput>) {
-  pastikanBoleh(user, 'kelola_master');
+  pastikanBoleh(user, 'kelola_skpd');
   await sambung();
   return ser((await Skpd.create(input).catch((e) => galatDuplikat(e, 'SKPD')))!.toObject());
 }
 
 export async function ubahSkpd(user: SessionUser, id: string, input: z.infer<typeof S.skpdUbah>) {
-  pastikanBoleh(user, 'kelola_master');
+  pastikanBoleh(user, 'kelola_skpd');
   await sambung();
   const d = await Skpd.findOneAndUpdate({ _id: oid(pastikanId(id, 'SKPD')) }, { $set: input }, { new: true })
     .lean()
@@ -53,14 +55,14 @@ export async function ubahSkpd(user: SessionUser, id: string, input: z.infer<typ
 }
 
 export async function buatSubUnit(user: SessionUser, input: z.infer<typeof S.subUnitInput>) {
-  pastikanBoleh(user, 'kelola_master');
+  pastikanBoleh(user, 'kelola_skpd');
   await sambung();
   if (!(await Skpd.exists({ _id: oid(input.skpdId) }))) throw tidakDitemukan('SKPD');
   return ser((await SubUnit.create({ ...input, skpdId: oid(input.skpdId) }).catch((e) => galatDuplikat(e, 'Sub unit')))!.toObject());
 }
 
 export async function ubahSubUnit(user: SessionUser, id: string, input: z.infer<typeof S.skpdUbah>) {
-  pastikanBoleh(user, 'kelola_master');
+  pastikanBoleh(user, 'kelola_skpd');
   await sambung();
   const d = await SubUnit.findOneAndUpdate({ _id: oid(pastikanId(id, 'Sub unit')) }, { $set: input }, { new: true }).lean();
   if (!d) throw tidakDitemukan('Sub unit');
@@ -95,14 +97,14 @@ export async function detailSumberDana(user: SessionUser, kodeAtauId: string, ta
 }
 
 export async function buatSumberDana(user: SessionUser, input: z.infer<typeof S.sumberDanaInput>) {
-  pastikanBoleh(user, 'kelola_master');
+  pastikanBoleh(user, 'kelola_sumber_dana');
   await sambung();
   const d = await SumberDana.create({ ...input, indukKode: indukKode(input.kode) }).catch((e) => galatDuplikat(e, 'Sumber dana'));
   return ser(d!.toObject());
 }
 
 export async function ubahSumberDana(user: SessionUser, id: string, input: z.infer<typeof S.sumberDanaUbah>) {
-  pastikanBoleh(user, 'kelola_master');
+  pastikanBoleh(user, 'kelola_sumber_dana');
   await sambung();
   const d = await SumberDana.findOneAndUpdate({ _id: oid(pastikanId(id, 'Sumber dana')) }, { $set: input }, { new: true }).lean();
   if (!d) throw tidakDitemukan('Sumber dana');
@@ -111,7 +113,7 @@ export async function ubahSumberDana(user: SessionUser, id: string, input: z.inf
 
 /** Sumber dana yang sudah dipakai alokasi atau pagu tidak bisa dihapus; nonaktifkan saja. */
 export async function hapusSumberDana(user: SessionUser, id: string) {
-  pastikanBoleh(user, 'kelola_master');
+  pastikanBoleh(user, 'kelola_sumber_dana');
   await sambung();
   const _id = oid(pastikanId(id, 'Sumber dana'));
   const dipakai =
@@ -183,7 +185,7 @@ export async function daftarTagging(user: SessionUser, f: { tahun: number; sumbe
 }
 
 export async function buatTagging(user: SessionUser, input: z.infer<typeof S.taggingInput>) {
-  pastikanBoleh(user, 'kelola_master');
+  pastikanBoleh(user, 'kelola_sumber_dana');
   await sambung();
   if (!(await SumberDana.exists({ _id: oid(input.sumberDanaId) }))) throw tidakDitemukan('Sumber dana');
   const d = await Tagging.create({
@@ -199,7 +201,7 @@ export async function buatTagging(user: SessionUser, input: z.infer<typeof S.tag
 }
 
 export async function ubahTagging(user: SessionUser, id: string, input: z.infer<typeof S.taggingUbah>) {
-  pastikanBoleh(user, 'kelola_master');
+  pastikanBoleh(user, 'kelola_sumber_dana');
   await sambung();
   const d = await Tagging.findOneAndUpdate({ _id: oid(pastikanId(id, 'Tagging')) }, { $set: { ...input, diubahOleh: oid(user.id) } }, { new: true }).lean();
   if (!d) throw tidakDitemukan('Tagging');
@@ -207,11 +209,78 @@ export async function ubahTagging(user: SessionUser, id: string, input: z.infer<
 }
 
 export async function hapusTagging(user: SessionUser, id: string) {
-  pastikanBoleh(user, 'kelola_master');
+  pastikanBoleh(user, 'kelola_sumber_dana');
   await sambung();
   const d = await Tagging.findOneAndDelete({ _id: oid(pastikanId(id, 'Tagging')) }).lean();
   if (!d) throw tidakDitemukan('Tagging');
   const { catatAudit } = await import('@danboy/db');
   await catatAudit({ aksi: 'hapus', koleksi: 'tagging', dokumenId: d._id, sebelum: ser(d) as Record<string, unknown> });
   return { ok: true };
+}
+
+/* ---------- Nomenklatur: tambah/ubah manual (Super Admin) ---------- */
+
+/** Versi aktif tempat entri manual ditambahkan: versi impor terbaru yang aktif, atau "manual" bila belum ada impor. */
+async function versiAktif(): Promise<string> {
+  const terbaru = await Nomenklatur.findOne({ aktif: true }).sort({ updatedAt: -1 }).select('versi').lean();
+  return terbaru?.versi ?? 'manual';
+}
+
+export async function buatNomenklatur(user: SessionUser, input: z.infer<typeof S.nomenklaturInput>) {
+  pastikanBoleh(user, 'kelola_nomenklatur');
+  await sambung();
+  const kode = normalisasiKode(input.kode);
+  if (await Nomenklatur.exists({ kode, aktif: true })) throw new Galat('VALIDASI', `Kode ${kode} sudah ada`, { kode: 'Kode sudah ada' });
+  const induk = indukNomenklatur(input.jenis, kode);
+  if (induk && !(await Nomenklatur.exists({ kode: induk, aktif: true })))
+    throw new Galat('VALIDASI', `Induk ${induk} belum ada; tambahkan induknya lebih dulu`, { kode: `Induk ${induk} belum ada` });
+  const versi = await versiAktif();
+  const d = await Nomenklatur.findOneAndUpdate(
+    { versi, kode },
+    { $set: { jenis: input.jenis, nama: input.nama, indukKode: induk ?? null, aktif: true } },
+    { upsert: true, new: true },
+  ).lean();
+  return ser(d);
+}
+
+export async function ubahNomenklatur(user: SessionUser, id: string, input: z.infer<typeof S.nomenklaturUbah>) {
+  pastikanBoleh(user, 'kelola_nomenklatur');
+  await sambung();
+  const d = await Nomenklatur.findOneAndUpdate({ _id: oid(pastikanId(id, 'Nomenklatur')) }, { $set: input }, { new: true }).lean();
+  if (!d) throw tidakDitemukan('Nomenklatur');
+  return ser(d);
+}
+
+/* ---------- Rekening (Admin Keuangan) ---------- */
+
+export async function daftarRekening(user: SessionUser, f: { q?: string; page?: number; limit?: number } = {}) {
+  pastikanBoleh(user, 'lihat');
+  await sambung();
+  const filter: Record<string, unknown> = {};
+  if (f.q) {
+    const q = escapeRegex(f.q.trim());
+    filter.$or = [{ kode: { $regex: `^${q}` } }, { nama: { $regex: q, $options: 'i' } }];
+  }
+  const page = f.page ?? 1;
+  const limit = Math.min(f.limit ?? 50, 200);
+  const [data, total] = await Promise.all([
+    Rekening.find(filter).collation({ locale: 'id', numericOrdering: true }).sort({ kode: 1 }).skip((page - 1) * limit).limit(limit).lean(),
+    Rekening.countDocuments(filter),
+  ]);
+  return ser({ data, total, page, limit });
+}
+
+export async function buatRekening(user: SessionUser, input: z.infer<typeof S.rekeningInput>) {
+  pastikanBoleh(user, 'kelola_sumber_dana');
+  await sambung();
+  const d = await Rekening.create(input).catch((e) => galatDuplikat(e, 'Rekening'));
+  return ser(d!.toObject());
+}
+
+export async function ubahRekening(user: SessionUser, id: string, input: z.infer<typeof S.rekeningUbah>) {
+  pastikanBoleh(user, 'kelola_sumber_dana');
+  await sambung();
+  const d = await Rekening.findOneAndUpdate({ _id: oid(pastikanId(id, 'Rekening')) }, { $set: input }, { new: true }).lean();
+  if (!d) throw tidakDitemukan('Rekening');
+  return ser(d);
 }

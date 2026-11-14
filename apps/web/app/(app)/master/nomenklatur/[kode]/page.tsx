@@ -6,6 +6,7 @@ import { detailNomenklatur } from '@danboy/core/services';
 import { Kartu, KepalaHalaman, Kosong, Tabel, TD, TH } from '@/components/ui';
 import { konteksHalaman, num, type SP } from '@/lib/halaman';
 import { FormTagging, HapusTagging } from '../../tagging';
+import { FormNomenklatur } from '../form';
 
 export const metadata: Metadata = { title: 'Nomenklatur' };
 
@@ -15,7 +16,8 @@ export default async function DetailNomenklatur({ params, searchParams }: { para
   const tahun = num(sp.tahun, tahapan?.tahun ?? new Date().getFullYear());
   const d = await detailNomenklatur(user, decodeURIComponent(kode), tahun).catch(() => null);
   if (!d) notFound();
-  const kelola = boleh(user, 'kelola_master');
+  const kelola = boleh(user, 'kelola_sumber_dana');
+  const kelolaNomen = boleh(user, 'kelola_nomenklatur');
   const tagging = d.tagging as unknown as { _id: string; kodeSubkegiatan: string; kategori: string; rincian: string; sumberDanaId?: { nama: string; kode: string } }[];
   const leluhur = d.leluhur as unknown as { kode: string; nama: string }[];
 
@@ -23,6 +25,7 @@ export default async function DetailNomenklatur({ params, searchParams }: { para
     <>
       <KepalaHalaman
         judul={d.nama}
+        aksi={kelolaNomen ? <FormNomenklatur awal={{ _id: String(d._id), kode: d.kode, nama: d.nama, jenis: d.jenis, aktif: d.aktif }} /> : undefined}
         sub={
           <span className="inline-flex flex-wrap items-center gap-2">
             <span className="font-mono">{d.kode}</span> · {d.jenis} · versi {d.versi}

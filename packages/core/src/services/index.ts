@@ -9,4 +9,5 @@ export * from './master';
 export * from './pengguna';
 export * from './laporan';
 export * from './verifikasi';
+export * from './lengkapi';
 export { denganKonteks, sambung, putus } from '@danboy/db';

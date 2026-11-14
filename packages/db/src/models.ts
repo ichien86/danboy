@@ -81,6 +81,8 @@ const rekeningSchema = new Schema<RekeningDoc>(
   { kode: { type: String, required: true, unique: true }, nama: { type: String, required: true } },
   opsi,
 );
+rekeningSchema.index({ nama: 'text', kode: 'text' });
+aud(rekeningSchema, 'rekening');
 export const Rekening = buat('Rekening', rekeningSchema, 'rekening');
 
 export interface SumberDanaDoc {
@@ -242,7 +244,7 @@ export const SubkegiatanTahapan = buat('SubkegiatanTahapan', subkegiatanSchema, 
 
 /* ---------- 4.3 Impor, notifikasi, audit ---------- */
 
-export type JenisImpor = 'apbd' | 'nomenklatur' | 'sumber_dana' | 'rekening' | 'tagging' | 'verifikasi';
+export type JenisImpor = 'apbd' | 'nomenklatur' | 'sumber_dana' | 'rekening' | 'tagging' | 'verifikasi' | 'skpd';
 export type StatusBatch = 'diunggah' | 'diproses' | 'pratinjau' | 'diterapkan' | 'dibatalkan' | 'gagal' | 'selesai';
 export interface ImporBatchDoc {
   _id: Id; tahapanId?: Id | null; tahun?: number | null; jenis: JenisImpor; namaFile: string; hashFile: string;
@@ -253,7 +255,7 @@ const batchSchema = new Schema<ImporBatchDoc>(
   {
     tahapanId: { type: Schema.Types.ObjectId, ref: 'Tahapan', default: null },
     tahun: { type: Number, default: null },
-    jenis: { type: String, enum: ['apbd', 'nomenklatur', 'sumber_dana', 'rekening', 'tagging', 'verifikasi'], required: true },
+    jenis: { type: String, enum: ['apbd', 'nomenklatur', 'sumber_dana', 'rekening', 'tagging', 'verifikasi', 'skpd'], required: true },
     namaFile: { type: String, required: true },
     hashFile: { type: String, required: true },
     fileId: { type: Schema.Types.ObjectId, required: true },

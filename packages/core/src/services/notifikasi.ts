@@ -235,7 +235,7 @@ export async function hitungNotifikasiTerbuka(user: SessionUser, tahapanId?: str
 }
 
 export async function abaikanNotifikasi(user: SessionUser, id: string, alasan: string) {
-  pastikanBoleh(user, 'kelola_master');
+  pastikanBoleh(user, 'ubah_alokasi');
   await sambung();
   const n = await Notifikasi.findOneAndUpdate(
     { _id: oid(pastikanId(id, 'Notifikasi')), status: 'terbuka' },

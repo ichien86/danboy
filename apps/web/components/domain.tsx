@@ -69,19 +69,33 @@ export function TingkatNotifikasi({ tingkat }: { tingkat: 'kritis' | 'peringatan
   return <Lencana nada={TINGKAT[tingkat]}>{tingkat[0].toUpperCase() + tingkat.slice(1)}</Lencana>;
 }
 
+/** Nama yang tampil untuk setiap jenis temuan/notifikasi. Kode (R1, R2, …) hanya dipakai di dalam sistem. */
 export const LABEL_ATURAN: Record<string, string> = {
   R0: 'Nilai SIPD diperbarui',
-  R1: 'Pagu/nilai berubah',
-  R2: 'Sumber dana berbeda',
+  R1: 'Pagu atau nilai berubah',
+  R2: 'Sumber dana beda dengan SIPD',
   R3: 'Pagu sumber dana terlampaui',
   R4: 'Alokasi belum seimbang',
   R5: 'Di luar daftar tagging',
   R6: 'Tertagging, didanai sumber lain',
   R7: 'Subkegiatan baru',
-  R8: 'Tidak ada di impor terakhir',
-  R9: 'Kode perlu dipetakan',
+  R8: 'Hilang dari SIPD',
+  R9: 'Belum ada di master',
   R10: 'Tahapan terkunci',
   VS: 'Input SIPD belum sesuai',
+  PD: 'Nama perangkat daerah berbeda',
+};
+
+/** Penjelasan singkat tiap jenis notifikasi, untuk tooltip dan halaman Notifikasi. */
+export const PENJELASAN_ATURAN: Record<string, string> = {
+  R2: 'Komposisi sumber dana di SIPD berbeda dengan yang tersimpan; putuskan Ikut SIPD atau Edit Sendiri di menu Perbedaan SIPD.',
+  R3: 'Jumlah alokasi suatu sumber dana melebihi pagu sumber dana yang diisi Admin Keuangan.',
+  R4: 'Jumlah alokasi sumber dana suatu subkegiatan belum sama dengan pagunya.',
+  R5: 'Subkegiatan didanai sumber dana khusus tetapi tidak ada di daftar tagging tahun ini.',
+  R8: 'Subkegiatan ada di aplikasi tetapi tidak ada lagi di impor SIPD terakhir.',
+  R9: 'Impor SIPD merujuk subkegiatan, sumber dana, SKPD, atau sub unit yang belum ada di master; barisnya ditahan.',
+  VS: 'Hasil Verifikasi SIPD: sumber dana yang diinput SKPD di SIPD belum sama dengan alokasi di aplikasi.',
+  PD: 'Nama SKPD/sub unit di file SIPD berbeda dengan master perangkat daerah; data tetap ditautkan menurut kode.',
 };
 
 export const tanggal = (d: string | Date | null | undefined, jam = false) =>

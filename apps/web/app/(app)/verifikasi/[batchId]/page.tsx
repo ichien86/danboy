@@ -236,7 +236,7 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
 
           <form method="get" className="mb-3 grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
             <input type="hidden" name="tandai" value={tandai || (skpd ? 'semua' : '')} />
-            <Masukan name="q" defaultValue={sp.q} placeholder="Kode atau nama subkegiatan" aria-label="Cari" className="lg:w-64" />
+            <Masukan name="q" data-cari defaultValue={sp.q} placeholder="Kode atau nama subkegiatan  (tekan /)" aria-label="Cari" className="lg:w-64" />
             <Pilihan name="status" defaultValue={status} aria-label="Status" className="lg:w-64">
               <option value="tidak_sesuai">Semua yang belum sesuai</option>
               {(Object.keys(LABEL_STATUS_VERIFIKASI) as StatusVerifikasi[]).map((s) => (

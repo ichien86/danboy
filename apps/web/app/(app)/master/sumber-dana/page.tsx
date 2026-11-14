@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { boleh } from '@danboy/core';
-import { daftarSumberDana } from '@danboy/core/services';
+import { batasUnggahMb, daftarSumberDana } from '@danboy/core/services';
+import { TombolImpor } from '@/components/impor';
+import { RiwayatImpor } from '@/components/riwayat-impor';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Masukan, Tabel, TD, TH, Tombol } from '@/components/ui';
 import { konteksHalaman, type SP } from '@/lib/halaman';
 import { FormSumberDana } from './form';
@@ -19,17 +21,26 @@ interface SD {
 }
 
 export default async function MasterSumberDana({ searchParams }: { searchParams: SP }) {
-  const { user, sp } = await konteksHalaman(searchParams);
+  const { user, sp, tahapan } = await konteksHalaman(searchParams);
   const data = (await daftarSumberDana(user, { q: sp.q })) as unknown as SD[];
-  const kelola = boleh(user, 'kelola_master');
+  const kelola = boleh(user, 'kelola_sumber_dana');
   const kedalaman = (k: string) => k.split('.').length;
   const min = data.length ? Math.min(...data.map((d) => kedalaman(d.kode))) : 1;
 
   return (
     <>
-      <KepalaHalaman judul="Master sumber dana" sub={`${data.length} sumber dana · tandai "khusus" untuk sumber dana yang wajib sesuai daftar tagging (R5)`} aksi={kelola ? <FormSumberDana /> : undefined} />
+      <KepalaHalaman judul="Master sumber dana" sub={`${data.length} sumber dana · tandai "khusus" untuk sumber dana yang wajib sesuai daftar tagging (R5)`} aksi={
+          kelola ? (
+            <>
+              <TombolImpor jenis="sumber_dana" label="Impor sumber dana" batasMb={batasUnggahMb()} />
+              <TombolImpor jenis="tagging" label="Impor tagging" batasMb={batasUnggahMb()} tahun={tahapan?.tahun} />
+              <FormSumberDana />
+            </>
+          ) : undefined
+        }
+      />
       <form method="get" className="mb-3 flex gap-2">
-        <Masukan name="q" defaultValue={sp.q} placeholder="Cari kode atau nama" className="max-w-sm" aria-label="Cari sumber dana" />
+        <Masukan name="q" data-cari defaultValue={sp.q} placeholder="Cari kode atau nama  (tekan /)" className="max-w-sm" aria-label="Cari sumber dana" />
         <Tombol type="submit">Cari</Tombol>
       </form>
       <Kartu padat>
@@ -70,9 +81,10 @@ export default async function MasterSumberDana({ searchParams }: { searchParams:
             </tbody>
           </Tabel>
         ) : (
-          <Kosong judul="Belum ada sumber dana">Impor master sumber dana dari menu Impor, atau tambah manual.</Kosong>
+          <Kosong judul="Belum ada sumber dana">Impor dari file lewat tombol di atas, atau tambah manual.</Kosong>
         )}
       </Kartu>
+      {kelola && <RiwayatImpor user={user} jenis={['sumber_dana', 'tagging']} />}
     </>
   );
 }

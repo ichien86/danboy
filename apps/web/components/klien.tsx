@@ -268,6 +268,33 @@ export function PencarianCepat({ tahapanId }: { tahapanId?: string }) {
   );
 }
 
+/* ---------- Pintasan "/" untuk kotak cari halaman ---------- */
+
+/**
+ * Tekan "/" (saat tidak sedang mengetik) untuk langsung ke kotak cari di halaman (elemen ber-atribut data-cari).
+ * Bila halaman tidak punya kotak cari, pencarian cepat subkegiatan (Ctrl+K) yang dibuka.
+ */
+export function PintasanCari() {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+      e.preventDefault();
+      const kotak = document.querySelector<HTMLInputElement>('input[data-cari]');
+      if (kotak) {
+        kotak.focus();
+        kotak.select();
+      } else {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
+      }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
+  return null;
+}
+
 /* ---------- Navigasi aktif ---------- */
 
 export function TautanNav({ href, children, ikon }: { href: string; children: ReactNode; ikon: ReactNode }) {

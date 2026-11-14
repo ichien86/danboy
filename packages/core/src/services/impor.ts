@@ -21,7 +21,7 @@ import {
 } from '@danboy/db';
 import { GalatFormat, bacaTabel, deteksiJenis } from '@danboy/excel';
 import { barisApbd } from '@danboy/schema';
-import { pastikanBoleh, type SessionUser } from '../akses';
+import { aksiImpor, pastikanBoleh, type SessionUser } from '../akses';
 import { Galat, tidakDitemukan } from '../galat';
 import { normalisasiKode } from '../kode';
 import { banding, kunciSubkegiatan, type Operasi, type Temuan, type Tersimpan } from '../pembanding';
@@ -59,6 +59,7 @@ export interface InputUnggah {
 /** POST /api/impor: simpan ke GridFS, buat batch, masukkan job proses. */
 export async function unggahImpor(user: SessionUser, input: InputUnggah) {
   pastikanBoleh(user, 'impor');
+  pastikanBoleh(user, aksiImpor(input.jenis));
   await sambung();
   if (input.isi.length > batasUnggahMb() * 1024 * 1024)
     throw new Galat('FILE_TERLALU_BESAR', `Ukuran file melebihi ${batasUnggahMb()} MB`);
@@ -160,11 +161,26 @@ export async function statusImpor(
   return ser({ batch, ...daftar, page, limit });
 }
 
-export async function terapkanImpor(user: SessionUser, batchId: string) {
+/** Izin per jenis batch: impor nomenklatur hanya Super Admin, jenis lain Super Admin dan Admin Keuangan. */
+async function pastikanBolehBatch(user: SessionUser, batchId: string): Promise<ImporBatchDoc> {
   pastikanBoleh(user, 'impor');
   await sambung();
   const b = await ImporBatch.findById(pastikanId(batchId, 'Batch')).lean<ImporBatchDoc>();
   if (!b) throw tidakDitemukan('Batch impor');
+  pastikanBoleh(user, aksiImpor(b.jenis));
+  return b;
+}
+
+/**
+ * Terapkan pratinjau. Bila ada baris yang ditahan (rujukan belum ada di master, data tidak valid), pengguna harus
+ * mengonfirmasi bahwa baris tersebut tidak ikut diimpor; tanpa konfirmasi permintaan ditolak PERLU_KONFIRMASI.
+ */
+export async function terapkanImpor(user: SessionUser, batchId: string, opsi: { konfirmasi?: boolean } = {}) {
+  const b = await pastikanBolehBatch(user, batchId);
+  const rk = (b.ringkasan ?? {}) as Record<string, unknown>;
+  const ditahan = Number(rk.barisDitahan ?? rk.ditahan ?? rk.barisGagal ?? 0);
+  if (ditahan > 0 && !opsi.konfirmasi && b.status === 'pratinjau')
+    throw new Galat('PERLU_KONFIRMASI', `${ditahan} baris ditahan dan tidak akan ikut diimpor`, { barisDitahan: ditahan, totalPaguDitahan: rk.totalPaguDitahan ?? null });
   if (b.status !== 'pratinjau') throw new Galat('DATA_BERUBAH', `Batch berstatus ${b.status}, bukan pratinjau`);
   if (b.jenis === 'apbd') await pastikanTahapanTerbuka(b.tahapanId);
   await ImporBatch.updateOne({ _id: b._id }, { $set: { 'ringkasan.sedangDiterapkan': true } });
@@ -173,8 +189,7 @@ export async function terapkanImpor(user: SessionUser, batchId: string) {
 }
 
 export async function batalImpor(user: SessionUser, batchId: string) {
-  pastikanBoleh(user, 'impor');
-  await sambung();
+  await pastikanBolehBatch(user, batchId);
   const b = await ImporBatch.findOneAndUpdate(
     { _id: oid(pastikanId(batchId, 'Batch')), status: { $in: ['pratinjau', 'diunggah', 'gagal'] } },
     { $set: { status: 'dibatalkan' } },
@@ -187,8 +202,7 @@ export async function batalImpor(user: SessionUser, batchId: string) {
 
 /** Proses ulang batch (misal setelah kode yang ditahan ditambahkan ke master): menutup R9 yang sudah teratasi. */
 export async function prosesUlangImpor(user: SessionUser, batchId: string) {
-  pastikanBoleh(user, 'impor');
-  await sambung();
+  await pastikanBolehBatch(user, batchId);
   const b = await ImporBatch.findOneAndUpdate(
     {
       _id: oid(pastikanId(batchId, 'Batch')),
@@ -238,19 +252,34 @@ export async function prosesApbd(batchId: string) {
     const jenisFile = deteksiJenis(batch.namaFile, isi);
     if (!jenisFile) throw new Galat('FORMAT_FILE', 'Format file tidak dikenali');
 
-    // master untuk pencocokan kode
-    const skpdPer = new Map((await Skpd.find().lean()).map((s) => [s.kode, String(s._id)]));
-    const subUnitPer = new Map((await SubUnit.find().lean()).map((s) => [s.kode, { id: String(s._id), skpdId: String(s.skpdId) }]));
-    const sdList = await SumberDana.find().lean();
-    const sdPer = new Map(sdList.map((s) => [s.kode, String(s._id)]));
-    const masterSdKosong = sdList.length === 0;
-    const nomenklaturAda = (await Nomenklatur.countDocuments({ jenis: 'subkegiatan', aktif: true })) > 0;
-    const kodeNomenklatur = nomenklaturAda
-      ? new Set((await Nomenklatur.find({ jenis: 'subkegiatan', aktif: true }).select('kode').lean()).map((n) => n.kode))
-      : null;
+    // master untuk pencocokan kode. Impor APBD TIDAK membuat data master: rujukan yang belum ada ditahan
+    // dan dikelompokkan untuk dikonfirmasi (atau dilengkapi oleh yang berwenang lalu diproses ulang).
+    const skpdMaster = new Map((await Skpd.find().lean()).map((s) => [s.kode, { id: String(s._id), nama: s.nama }]));
+    const subUnitMaster = new Map(
+      (await SubUnit.find().lean()).map((s) => [s.kode, { id: String(s._id), skpdId: String(s.skpdId), nama: s.nama }]),
+    );
+    const kodeSkpdPerId = new Map([...skpdMaster].map(([kode, v]) => [v.id, kode]));
+    const sdPer = new Map((await SumberDana.find().lean()).map((s) => [s.kode, String(s._id)]));
+    const kodeNomenklatur = new Set((await Nomenklatur.find({ jenis: 'subkegiatan', aktif: true }).select('kode').lean()).map((n) => n.kode));
 
     await ImporBaris.deleteMany({ batchId: batch._id });
     await HasilBanding.deleteMany({ batchId: batch._id });
+
+    type Rujukan = { kode: string; nama: string; baris: number; pagu: number; kodeSkpd?: string };
+    const hilang = {
+      subkegiatan: new Map<string, Rujukan>(),
+      sumberDana: new Map<string, Rujukan>(),
+      skpd: new Map<string, Rujukan>(),
+      subUnit: new Map<string, Rujukan>(),
+    };
+    const catatHilang = (m: Map<string, Rujukan>, kode: string, nama: string, pagu: number, kodeSkpd?: string) => {
+      const r = m.get(kode) ?? { kode, nama, baris: 0, pagu: 0, ...(kodeSkpd ? { kodeSkpd } : {}) };
+      r.baris++;
+      r.pagu += pagu || 0;
+      m.set(kode, r);
+    };
+    const bedaNama = { skpd: new Map<string, { kode: string; namaMaster: string; namaFile: string }>(), subUnit: new Map<string, { kode: string; namaMaster: string; namaFile: string; catatan?: string }>() };
+    const samaNama = (a: string, b: string) => a.replace(/\s+/g, ' ').trim().toUpperCase() === b.replace(/\s+/g, ' ').trim().toUpperCase();
 
     const ringkasan = {
       barisTotal: 0,
@@ -258,17 +287,14 @@ export async function prosesApbd(batchId: string) {
       barisDitahan: 0,
       totalPaguFile: 0,
       totalPaguOk: 0,
-      skpdBaru: [] as string[],
-      subUnitBaru: [] as string[],
-      sumberDanaBaru: [] as string[],
-      kodeAsing: { subkegiatan: [] as string[], sumberDana: [] as string[] },
+      totalPaguDitahan: 0,
       tahunSalah: 0,
+      barisTidakValid: 0,
       peringatan: [] as string[],
     };
-    if (!nomenklaturAda) ringkasan.peringatan.push('Master nomenklatur kosong: kode subkegiatan tidak diperiksa (R9).');
-    if (masterSdKosong) ringkasan.peringatan.push('Master sumber dana kosong: sumber dana dari file dibuat otomatis.');
-    const asingSub = new Set<string>();
-    const asingSd = new Set<string>();
+    if (!kodeNomenklatur.size) ringkasan.peringatan.push('Master nomenklatur masih kosong: semua baris akan ditahan sampai Super Admin mengisi nomenklatur.');
+    if (!skpdMaster.size) ringkasan.peringatan.push('Master perangkat daerah masih kosong: impor perangkat daerah lebih dulu (Super Admin).');
+    if (!sdPer.size) ringkasan.peringatan.push('Master sumber dana masih kosong: impor sumber dana lebih dulu (Admin Keuangan).');
     const terpetakan: BarisTerpetakan[] = [];
     let blok: Record<string, unknown>[] = [];
     const simpanBlok = async () => {
@@ -296,6 +322,15 @@ export async function prosesApbd(batchId: string) {
         namaSubUnit: teks(data['NAMA SUB UNIT']),
         kodeSubkegiatan: normalisasiKode(data['KODE SUB KEGIATAN']),
         namaSubkegiatan: teks(data['NAMA SUB KEGIATAN']),
+        // hierarki nomenklatur dari file (opsional), dipakai saat "Tambahkan ke master"
+        kodeUrusan: normalisasiKode(data['KODE URUSAN']),
+        namaUrusan: teks(data['NAMA URUSAN']),
+        kodeBidang: normalisasiKode(data['KODE BIDANG URUSAN']),
+        namaBidang: teks(data['NAMA BIDANG URUSAN']),
+        kodeProgram: normalisasiKode(data['KODE PROGRAM']),
+        namaProgram: teks(data['NAMA PROGRAM']),
+        kodeKegiatan: normalisasiKode(data['KODE KEGIATAN']),
+        namaKegiatan: teks(data['NAMA KEGIATAN']),
         kodeSumberDana: teks(data['KODE SUMBER DANA']),
         namaSumberDana: teks(data['NAMA SUMBER DANA']),
         kodeRekening: teks(data['KODE REKENING']),
@@ -305,64 +340,77 @@ export async function prosesApbd(batchId: string) {
         pagu: paguMentah,
       };
       let alasan: string | undefined;
+      const rujukan: string[] = [];
       if (!v.success) {
         alasan = v.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+        ringkasan.barisTidakValid++;
       } else if (v.data.TAHUN !== tahapan.tahun) {
         ringkasan.tahunSalah++;
         alasan = `TAHUN ${v.data.TAHUN} tidak sama dengan tahun tahapan ${tahapan.tahun}`;
       }
+      const kodeSkpd = simpan.kodeSkpd as string;
+      const kodeSu = simpan.kodeSubUnit as string;
+      const kodeSub = simpan.kodeSubkegiatan as string;
+      const kodeSd = simpan.kodeSumberDana as string;
+      const pagu = (paguMentah as number) ?? 0;
+      let su = subUnitMaster.get(kodeSu);
       if (!alasan) {
-        const kodeSub = simpan.kodeSubkegiatan as string;
-        const kodeSd = simpan.kodeSumberDana as string;
-        if (kodeNomenklatur && !kodeNomenklatur.has(kodeSub)) {
-          asingSub.add(kodeSub);
-          alasan = `R9: kode subkegiatan ${kodeSub} tidak ada di nomenklatur aktif`;
-        } else if (!sdPer.has(kodeSd)) {
-          if (masterSdKosong || ringkasan.sumberDanaBaru.includes(kodeSd)) {
-            const sd = await SumberDana.create({ kode: kodeSd, nama: simpan.namaSumberDana || kodeSd });
-            sdPer.set(kodeSd, String(sd._id));
-            ringkasan.sumberDanaBaru.push(kodeSd);
-          } else {
-            asingSd.add(kodeSd);
-            alasan = `R9: kode sumber dana ${kodeSd} tidak ada di master`;
-          }
+        const sk = skpdMaster.get(kodeSkpd);
+        if (!sk) {
+          catatHilang(hilang.skpd, kodeSkpd, simpan.namaSkpd as string, pagu);
+          rujukan.push('skpd');
+        } else if (!samaNama(sk.nama, simpan.namaSkpd as string)) {
+          bedaNama.skpd.set(kodeSkpd, { kode: kodeSkpd, namaMaster: sk.nama, namaFile: simpan.namaSkpd as string });
+        }
+        if (!su) {
+          catatHilang(hilang.subUnit, kodeSu, simpan.namaSubUnit as string, pagu, kodeSkpd);
+          rujukan.push('sub_unit');
+        } else {
+          if (!samaNama(su.nama, simpan.namaSubUnit as string))
+            bedaNama.subUnit.set(kodeSu, { kode: kodeSu, namaMaster: su.nama, namaFile: simpan.namaSubUnit as string });
+          if (sk && su.skpdId !== sk.id)
+            bedaNama.subUnit.set(kodeSu, {
+              kode: kodeSu,
+              namaMaster: su.nama,
+              namaFile: simpan.namaSubUnit as string,
+              catatan: `di master berada di SKPD ${kodeSkpdPerId.get(su.skpdId) ?? '?'}, di file di SKPD ${kodeSkpd}; data mengikuti master`,
+            });
+        }
+        if (!kodeNomenklatur.has(kodeSub)) {
+          catatHilang(hilang.subkegiatan, kodeSub, simpan.namaSubkegiatan as string, pagu);
+          rujukan.push('subkegiatan');
+        }
+        if (!sdPer.has(kodeSd)) {
+          catatHilang(hilang.sumberDana, kodeSd, simpan.namaSumberDana as string, pagu);
+          rujukan.push('sumber_dana');
+        }
+        if (rujukan.length) {
+          const nama = { skpd: 'SKPD', sub_unit: 'sub unit', subkegiatan: 'subkegiatan', sumber_dana: 'sumber dana' } as Record<string, string>;
+          alasan = `Belum ada di master: ${rujukan.map((r) => nama[r]).join(', ')}`;
+          simpan.rujukan = rujukan;
         }
       }
-      if (!alasan) {
-        // SKPD dan sub unit yang belum ada dibuat otomatis
-        const kodeSkpd = simpan.kodeSkpd as string;
-        let skpdId = skpdPer.get(kodeSkpd);
-        if (!skpdId) {
-          const s = await Skpd.create({ kode: kodeSkpd, nama: simpan.namaSkpd });
-          skpdId = String(s._id);
-          skpdPer.set(kodeSkpd, skpdId);
-          ringkasan.skpdBaru.push(`${kodeSkpd} ${simpan.namaSkpd}`);
-        }
-        const kodeSu = simpan.kodeSubUnit as string;
-        let su = subUnitPer.get(kodeSu);
-        if (!su) {
-          const s = await SubUnit.create({ kode: kodeSu, nama: simpan.namaSubUnit, skpdId: oid(skpdId) });
-          su = { id: String(s._id), skpdId };
-          subUnitPer.set(kodeSu, su);
-          ringkasan.subUnitBaru.push(`${kodeSu} ${simpan.namaSubUnit}`);
-        }
+      if (!alasan && su) {
+        // sub unit tertaut ke SKPD menurut master
         terpetakan.push({
           skpdId: su.skpdId,
           subUnitId: su.id,
-          kodeSubkegiatan: simpan.kodeSubkegiatan as string,
+          kodeSubkegiatan: kodeSub,
           namaSubkegiatan: simpan.namaSubkegiatan as string,
-          sumberDanaId: sdPer.get(simpan.kodeSumberDana as string)!,
-          kodeSumberDana: simpan.kodeSumberDana as string,
+          sumberDanaId: sdPer.get(kodeSd)!,
+          kodeSumberDana: kodeSd,
           kodeRekening: simpan.kodeRekening as string,
           paket: (simpan.paket as string) || undefined,
           namaPaket: (simpan.namaPaket as string) || undefined,
-          pagu: paguMentah as number,
+          pagu,
         });
         ringkasan.barisOk++;
-        ringkasan.totalPaguOk += paguMentah as number;
+        ringkasan.totalPaguOk += pagu;
       } else {
         ringkasan.barisDitahan++;
+        ringkasan.totalPaguDitahan += pagu;
       }
+      su = undefined;
       blok.push({ batchId: batch._id, noBaris, data: simpan, status: alasan ? 'ditahan' : 'ok', alasan });
       if (blok.length >= 1000) await simpanBlok();
     }
@@ -371,7 +419,14 @@ export async function prosesApbd(batchId: string) {
     if (ringkasan.barisTotal === 0) throw new Galat('FORMAT_FILE', 'File tidak berisi baris data');
     if (ringkasan.barisOk === 0 && ringkasan.tahunSalah > 0)
       throw new Galat('FORMAT_FILE', `TAHUN di file tidak cocok dengan tahun tahapan ${tahapan.tahun}`);
-    ringkasan.kodeAsing = { subkegiatan: [...asingSub].sort(), sumberDana: [...asingSd].sort() };
+    const urutKode = (m: Map<string, Rujukan>) => [...m.values()].sort((a, b) => a.kode.localeCompare(b.kode, 'id', { numeric: true }));
+    const rujukanHilang = {
+      subkegiatan: urutKode(hilang.subkegiatan),
+      sumberDana: urutKode(hilang.sumberDana),
+      skpd: urutKode(hilang.skpd),
+      subUnit: urutKode(hilang.subUnit),
+    };
+    const perbedaanNama = { skpd: [...bedaNama.skpd.values()], subUnit: [...bedaNama.subUnit.values()] };
     await set({ progres: 65 });
 
     // rekap + banding
@@ -438,29 +493,36 @@ export async function prosesApbd(batchId: string) {
     }
     for (let i = 0; i < docs.length; i += 500) await HasilBanding.insertMany(docs.slice(i, i + 500), { ordered: false });
 
-    // R9: satu notifikasi per kode yang perlu dipetakan
+    // R9: satu notifikasi per rujukan yang belum ada di master; PD: nama perangkat daerah berbeda dengan master
+    const JENIS_R9 = { subkegiatan: 'Subkegiatan', sumberDana: 'Sumber dana', skpd: 'SKPD', subUnit: 'Sub unit' } as const;
+    const daftarBeda = [
+      ...perbedaanNama.skpd.map((x) => ({ ...x, catatan: undefined as string | undefined, j: 'SKPD' })),
+      ...perbedaanNama.subUnit.map((x) => ({ ...x, j: 'Sub unit' })),
+    ];
     await terapkanCalon(
       [
-        ...ringkasan.kodeAsing.subkegiatan.map((k) => ({
-          kunciUnik: `R9:${batch._id}:${k}`,
-          aturan: 'R9',
-          tingkat: 'peringatan' as const,
-          pesan: `Kode subkegiatan ${k} di impor ${batch.namaFile} tidak ada di nomenklatur aktif`,
-          tautan: `/impor/${batch._id}#ditahan`,
+        ...(Object.keys(JENIS_R9) as (keyof typeof JENIS_R9)[]).flatMap((j) =>
+          rujukanHilang[j].map((r) => ({
+            kunciUnik: `R9:${batch._id}:${j}:${r.kode}`,
+            aturan: 'R9',
+            tingkat: 'peringatan' as const,
+            pesan: `${JENIS_R9[j]} ${r.kode} ${r.nama} di impor ${batch.namaFile} belum ada di master (${r.baris} baris ditahan)`,
+            tautan: `/impor/${batch._id}#rujukan`,
+            batchId: batch._id,
+            detail: { kode: r.kode, jenis: j },
+          })),
+        ),
+        ...daftarBeda.map((x) => ({
+          kunciUnik: `PD:${batch._id}:${x.kode}`,
+          aturan: 'PD',
+          tingkat: 'info' as const,
+          pesan: `${x.j} ${x.kode}: di master "${x.namaMaster}", di SIPD "${x.namaFile}"${x.catatan ? ` (${x.catatan})` : ''}`,
+          tautan: `/impor/${batch._id}#rujukan`,
           batchId: batch._id,
-          detail: { kode: k, jenis: 'subkegiatan' },
-        })),
-        ...ringkasan.kodeAsing.sumberDana.map((k) => ({
-          kunciUnik: `R9:${batch._id}:${k}`,
-          aturan: 'R9',
-          tingkat: 'peringatan' as const,
-          pesan: `Kode sumber dana ${k} di impor ${batch.namaFile} tidak ada di master sumber dana`,
-          tautan: `/impor/${batch._id}#ditahan`,
-          batchId: batch._id,
-          detail: { kode: k, jenis: 'sumber_dana' },
+          detail: { kode: x.kode, namaMaster: x.namaMaster, namaFile: x.namaFile },
         })),
       ],
-      { aturan: ['R9'], batchId: batch._id, tahapanId: tahapan._id },
+      { aturan: ['R9', 'PD'], batchId: batch._id, tahapanId: tahapan._id },
     );
 
     await set({
@@ -468,6 +530,8 @@ export async function prosesApbd(batchId: string) {
       progres: 100,
       ringkasan: {
         ...ringkasan,
+        rujukanHilang,
+        perbedaanNama,
         versi: undefined,
         jumlahSubkegiatanFile: sipd.size,
         jumlahSubkegiatanTersimpan: tersimpan.size,

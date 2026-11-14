@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { boleh } from '@danboy/core';
+import { boleh, LABEL_PERAN as PERAN } from '@danboy/core';
 import { daftarPengguna, daftarSkpd } from '@danboy/core/services';
 import { tanggal } from '@/components/domain';
 import { Kartu, KepalaHalaman, Lencana, Tabel, TD, TH } from '@/components/ui';
@@ -9,7 +9,6 @@ import { FormPengguna, ResetSandi } from './form';
 
 export const metadata: Metadata = { title: 'Pengguna' };
 
-const PERAN = { super_admin: 'Super Admin', admin: 'Admin', skpd: 'SKPD' } as const;
 
 interface U {
   _id: string;

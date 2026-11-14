@@ -19,6 +19,7 @@
     "server-only": "^0.0.1",
     "bullmq": "^5.34.0",
     "clsx": "^2.1.1",
+    "dotenv": "^16.4.7",
     "exceljs": "^4.4.0",
     "lucide-react": "^0.468.0",
     "mongoose": "^8.9.0",

@@ -24,7 +24,6 @@ Butuh Node.js 22+ dan pnpm 9 (`npx pnpm@9.15.0 …` juga bisa).
 ```bash
 pnpm install
 cp .env.example .env              # isi AUTH_SECRET: openssl rand -base64 32
-cp .env apps/web/.env.local
 
 pnpm dev:db                       # terminal 1: MongoDB replica set lokal (data di .data/mongo)
 pnpm db:seed --contoh             # sekali: akun superadmin + data contoh 2027 (sandi dicetak di layar)
@@ -35,6 +34,33 @@ Tanpa `REDIS_URL`, pekerjaan berat (impor, salin tahapan, cron jadwal) dijalanka
 Dengan Redis, isi `REDIS_URL` lalu jalankan `pnpm dev:worker`.
 
 `SEED_USERNAME` dan `SEED_PASSWORD` bisa diatur untuk seed; tanpa itu sandi sementara acak dicetak sekali.
+
+## Database MongoDB
+
+Semua data (master, anggaran per tahapan, file unggahan di GridFS, notifikasi, log audit) disimpan di MongoDB, database
+`danboy`. Pengaturannya satu tempat: `MONGODB_URI` di `.env` akar repositori.
+
+| Pilihan | `MONGODB_URI` |
+| --- | --- |
+| MongoDB pengembangan (`pnpm dev:db`) | `mongodb://127.0.0.1:27017/danboy?replicaSet=rs0` |
+| MongoDB Atlas | `mongodb+srv://<user>:<sandi>@<cluster>.mongodb.net/danboy?retryWrites=true&w=majority` |
+| MongoDB terpasang sendiri | `mongodb://<host>:27017/danboy?replicaSet=rs0` |
+
+MongoDB **wajib replica set**, karena impor, salin tahapan, dan keputusan Admin memakai transaksi. Atlas sudah replica set.
+MongoDB yang dipasang sendiri (Windows/Linux) perlu dijalankan dengan `replication.replSetName: rs0` di `mongod.cfg`, lalu
+sekali `mongosh --eval "rs.initiate()"`. Bila URI tidak menyebut nama database, aplikasi memakai `danboy`
+(atau isi `MONGODB_DB`). Cek koneksi dan replica set di `GET /api/kesehatan`.
+
+**Memindahkan data yang sudah ada** ke MongoDB lain (asal tidak diubah; file unggahan dan log audit ikut; indeks dipasang):
+
+```bash
+pnpm data:pindah --ke "mongodb+srv://<user>:<sandi>@<cluster>.mongodb.net/danboy"
+# asal bawaan = MONGODB_URI di .env; tambahkan --timpa bila database tujuan sudah berisi
+```
+
+Setelah itu ganti `MONGODB_URI` di `.env` ke alamat tujuan dan jalankan ulang aplikasi. Untuk melihat isi database secara
+langsung, sambungkan MongoDB Compass ke alamat yang sama (untuk MongoDB pengembangan:
+`mongodb://127.0.0.1:27017/?directConnection=true`).
 
 ## Uji
 
@@ -85,8 +111,23 @@ di `TUJUAN_CADANGAN`. **Pemantauan:** `GET /api/kesehatan` (MongoDB, Redis, antr
 
 1. **Pengaturan → Tahun & Tahapan** (Super Admin): buat tahun dan tahapan beserta jadwal. Tahapan dibuka otomatis saat jadwal mulai
    tiba; data tahapan sebelumnya disalin dalam satu transaksi.
-2. **Impor**: master sumber dana, nomenklatur, tagging, lalu rincian APBD ekspor SIPD. Setiap impor berhenti di pratinjau; data baru
-   berubah setelah **Terapkan**.
+2. **Isi data master dan APBD.** Impor menyatu dengan halaman pengelolaan datanya; setiap halaman punya tombol impor, tambah, ubah,
+   dan riwayat impornya sendiri. Setiap impor berhenti di pratinjau; data baru berubah setelah **Terapkan**.
+
+   | Halaman | Isi | Kewenangan |
+   | --- | --- | --- |
+   | Master → Nomenklatur | impor dari SIPD, tambah, ubah, nonaktifkan | Super Admin |
+   | Master → Perangkat Daerah | impor, tambah, ubah SKPD & sub unit (terpisah dari impor APBD) | Super Admin |
+   | Master → Sumber Dana | impor sumber dana, impor tagging, tambah, ubah | Admin Keuangan (dan Super Admin) |
+   | Master → Rekening | impor, tambah, ubah | Admin Keuangan (dan Super Admin) |
+   | Subkegiatan | impor rincian APBD dari SIPD ke tahapan aktif | Admin Keuangan (dan Super Admin) |
+   **Keterhubungan data saat impor APBD.** Impor APBD tidak membuat data master apa pun. Baris yang merujuk subkegiatan,
+   sumber dana, SKPD, atau sub unit yang belum ada di master **ditahan** dan dikelompokkan di pratinjau. Pengelola master
+   yang berwenang dapat menekan **Tambahkan ke master** (memakai kode & nama dari file; untuk subkegiatan beserta induknya),
+   lalu impor diproses ulang otomatis. Menerapkan impor yang masih punya baris ditahan meminta konfirmasi terlebih dulu.
+   Nama SKPD/sub unit di SIPD yang berbeda dengan master tidak menghentikan impor (data ditautkan menurut kode), tetapi
+   muncul sebagai peringatan di pratinjau dan di Notifikasi.
+
 3. **Rekap Sumber Dana → Isi pagu sumber dana**. Pelanggaran pagu tidak mengunci, hanya memicu R3.
 4. **Perbedaan SIPD**: putuskan Ikut SIPD atau Edit Sendiri. Keputusan diingat sampai komposisi SIPD berubah lagi.
 5. **Subkegiatan / Matriks**: lihat dan ubah alokasi (Admin). Ctrl+K untuk mencari subkegiatan.
@@ -100,6 +141,24 @@ di `TUJUAN_CADANGAN`. **Pemantauan:** `GET /api/kesehatan` (MongoDB, Redis, antr
    `hasilBanding.tindakLanjut` beserta siapa dan kapan, dan dicatat di log audit); kepastiannya dicek oleh verifikasi berikutnya
    dengan ekspor SIPD terbaru. Admin melihat progres centang per SKPD dan tetap bisa mengunduh Excel. "Cek ulang" memeriksa file
    yang sama terhadap alokasi terbaru dan mempertahankan centang yang temuannya tidak berubah.
+
+### Jenis notifikasi
+
+| Nama di aplikasi | Kode | Arti |
+| --- | --- | --- |
+| Input SIPD belum sesuai | VS | Hasil Verifikasi SIPD: sumber dana yang diinput SKPD di SIPD belum sama dengan alokasi di aplikasi |
+| Sumber dana beda dengan SIPD | R2 | Komposisi sumber dana di SIPD berbeda dengan yang tersimpan; putuskan di menu Perbedaan SIPD |
+| Pagu sumber dana terlampaui | R3 | Jumlah alokasi suatu sumber dana melebihi pagu sumber dana |
+| Alokasi belum seimbang | R4 | Jumlah alokasi sumber dana suatu subkegiatan belum sama dengan pagunya |
+| Di luar daftar tagging | R5 | Subkegiatan didanai sumber dana khusus tetapi tidak ada di daftar tagging |
+| Hilang dari SIPD | R8 | Subkegiatan ada di aplikasi tetapi tidak ada lagi di impor SIPD terakhir |
+| Belum ada di master | R9 | Impor merujuk subkegiatan/sumber dana/SKPD/sub unit yang belum ada di master |
+| Nama perangkat daerah berbeda | PD | Nama SKPD/sub unit di SIPD berbeda dengan master |
+
+### Pintasan keyboard
+
+- `/` — langsung ke kotak cari di halaman (Subkegiatan, Matriks, Perbedaan, Master, hasil verifikasi). Di halaman tanpa kotak cari, membuka pencarian cepat.
+- `Ctrl+K` — pencarian cepat subkegiatan dari halaman mana pun.
 
 ## Penyimpangan dari TDD (sengaja, untuk dicatat)
 

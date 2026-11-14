@@ -34,7 +34,7 @@ if (process.argv.includes('--contoh')) {
   };
   const terapkan = async (b: { _id: unknown; status: string; galat?: string | null }, label: string) => {
     if (b.status !== 'pratinjau') throw new Error(`${label}: ${b.status} ${b.galat ?? ''}`);
-    await svc.terapkanImpor(user, String(b._id));
+    await svc.terapkanImpor(user, String(b._id), { konfirmasi: true });
     await svc.tungguJobLokal();
     console.log(`  + ${label}`);
   };
@@ -48,6 +48,7 @@ if (process.argv.includes('--contoh')) {
         'master nomenklatur',
       );
       await terapkan(await tunggu(await svc.unggahImpor(user, { jenis: 'tagging', tahun: 2027, namaFile: 'tagging.csv', isi: fix('tagging.csv') })), 'daftar tagging 2027');
+      await terapkan(await tunggu(await svc.unggahImpor(user, { jenis: 'skpd', namaFile: 'perangkat-daerah.csv', isi: fix('apbd-2027-kecil.csv') })), 'master perangkat daerah');
     }
     if (!(await Tahapan.exists({ tahun: 2027, jenis: 'APBD' }))) {
       const baru = await svc.buatTahapan(user, {

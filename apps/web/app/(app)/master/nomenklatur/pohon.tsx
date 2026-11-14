@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { cx } from '@/components/ui';
 import { api } from '@/lib/klien';
+import { FormNomenklatur } from './form';
 
 interface Simpul {
   _id: string;
@@ -12,18 +13,20 @@ interface Simpul {
   nama: string;
   jenis: string;
   jumlahAnak: number;
+  aktif?: boolean;
 }
 
 const LABEL: Record<string, string> = { urusan: 'Urusan', bidang: 'Bidang', program: 'Program', kegiatan: 'Kegiatan', subkegiatan: 'Subkegiatan' };
 
-function Cabang({ n, tingkat }: { n: Simpul; tingkat: number }) {
+function Cabang({ n, tingkat, bolehUbah, onBerubah }: { n: Simpul; tingkat: number; bolehUbah: boolean; onBerubah?: () => void }) {
   const [buka, setBuka] = useState(false);
   const [anak, setAnak] = useState<Simpul[] | null>(null);
+  const muatAnak = async () => {
+    const r = await api<{ data: Simpul[] }>(`/api/nomenklatur?induk=${encodeURIComponent(n.kode)}`);
+    setAnak(r.data);
+  };
   const toggle = async () => {
-    if (!buka && !anak) {
-      const r = await api<{ data: Simpul[] }>(`/api/nomenklatur?induk=${encodeURIComponent(n.kode)}`);
-      setAnak(r.data);
-    }
+    if (!buka && !anak) await muatAnak();
     setBuka((b) => !b);
   };
   return (
@@ -45,11 +48,12 @@ function Cabang({ n, tingkat }: { n: Simpul; tingkat: number }) {
           <span className={cx('text-sm', tingkat < 2 && 'font-medium')}>{n.nama}</span>
         )}
         <span className="ml-auto hidden text-[11px] text-redup sm:inline">{LABEL[n.jenis]}</span>
+        {bolehUbah && <FormNomenklatur awal={n} onTersimpan={onBerubah} />}
       </div>
       {buka && anak && (
         <ul>
           {anak.map((a) => (
-            <Cabang key={a._id} n={a} tingkat={tingkat + 1} />
+            <Cabang key={a._id} n={a} tingkat={tingkat + 1} bolehUbah={bolehUbah} onBerubah={muatAnak} />
           ))}
         </ul>
       )}
@@ -57,11 +61,11 @@ function Cabang({ n, tingkat }: { n: Simpul; tingkat: number }) {
   );
 }
 
-export function PohonNomenklatur({ akar }: { akar: Simpul[] }) {
+export function PohonNomenklatur({ akar, bolehUbah }: { akar: Simpul[]; bolehUbah: boolean }) {
   return (
     <ul>
       {akar.map((n) => (
-        <Cabang key={n._id} n={n} tingkat={0} />
+        <Cabang key={n._id} n={n} tingkat={0} bolehUbah={bolehUbah} />
       ))}
     </ul>
   );

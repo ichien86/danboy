@@ -17,7 +17,7 @@ export async function FilterSubkegiatan({
   const [skpd, sd] = await Promise.all([user.peran === 'skpd' ? [] : daftarSkpd(user), daftarSumberDana(user)]);
   return (
     <form method="get" action={dasar} className="mb-3 grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
-      <Masukan name="q" defaultValue={sp.q} placeholder="Kode atau nama subkegiatan" aria-label="Cari" className="lg:w-64" />
+      <Masukan name="q" data-cari defaultValue={sp.q} placeholder="Kode atau nama subkegiatan  (tekan /)" aria-label="Cari" className="lg:w-64" />
       {user.peran !== 'skpd' && (
         <Pilihan name="skpd" defaultValue={sp.skpd ?? ''} aria-label="SKPD" className="lg:w-64">
           <option value="">Semua SKPD</option>

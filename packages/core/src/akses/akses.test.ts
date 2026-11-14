@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boleh, cakupan, dalamCakupan, pastikanBoleh, type SessionUser } from './index';
+import { aksiImpor, boleh, cakupan, dalamCakupan, pastikanBoleh, type SessionUser } from './index';
 import { Galat } from '../galat';
 
 const sa: SessionUser = { id: '1', username: 'sa', nama: 'SA', peran: 'super_admin' };
@@ -17,6 +17,14 @@ describe('akses', () => {
     expect(boleh(sk, 'lihat')).toBe(true);
     expect(boleh(sk, 'lihat_audit')).toBe(false);
     expect(boleh(null, 'lihat')).toBe(false);
+    // pembagian kewenangan: nomenklatur & perangkat daerah = Super Admin; sumber dana & impor APBD = Admin Keuangan
+    expect(boleh(sa, 'kelola_nomenklatur')).toBe(true);
+    expect(boleh(ad, 'kelola_nomenklatur')).toBe(false);
+    expect(boleh(ad, 'kelola_skpd')).toBe(false);
+    expect(boleh(ad, 'kelola_sumber_dana')).toBe(true);
+    expect(boleh(sk, 'kelola_sumber_dana')).toBe(false);
+    expect(aksiImpor('nomenklatur')).toBe('kelola_nomenklatur');
+    expect(aksiImpor('apbd')).toBe('impor');
   });
 
   it('pastikanBoleh melempar galat yang tepat', () => {

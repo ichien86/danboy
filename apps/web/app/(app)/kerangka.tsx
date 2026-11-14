@@ -5,7 +5,7 @@ import {
   BadgeCheck,
   Building2,
   ClipboardList,
-  FileUp,
+  BookOpenText,
   Grid3x3,
   History,
   LayoutDashboard,
@@ -21,12 +21,11 @@ import {
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { TautanNav } from '@/components/klien';
+import { PintasanCari, TautanNav } from '@/components/klien';
 import { keluar } from './aksi';
 
 interface Menu {
   perbedaan: boolean;
-  impor: boolean;
   master: boolean;
   tahapan: boolean;
   pengguna: boolean;
@@ -52,14 +51,14 @@ function Navigasi({ menu, pengguna }: { menu: Menu; pengguna: { nama: string; pe
           {menu.perbedaan && <TautanNav href="/perbedaan" ikon={<ArrowLeftRight />}>Perbedaan SIPD</TautanNav>}
           <TautanNav href="/notifikasi" ikon={<Bell />}>Notifikasi</TautanNav>
           <TautanNav href="/verifikasi" ikon={<BadgeCheck />}>Verifikasi SIPD</TautanNav>
-          {menu.impor && <TautanNav href="/impor" ikon={<FileUp />}>Impor</TautanNav>}
         </div>
         {menu.master && (
           <div className="space-y-0.5">
             <p className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-redup">Master</p>
             <TautanNav href="/master/sumber-dana" ikon={<Wallet />}>Sumber Dana</TautanNav>
+            <TautanNav href="/master/rekening" ikon={<BookOpenText />}>Rekening</TautanNav>
             <TautanNav href="/master/nomenklatur" ikon={<ListTree />}>Nomenklatur</TautanNav>
-            <TautanNav href="/master/skpd" ikon={<Building2 />}>SKPD</TautanNav>
+            <TautanNav href="/master/skpd" ikon={<Building2 />}>Perangkat Daerah</TautanNav>
           </div>
         )}
         {(menu.tahapan || menu.pengguna || menu.audit) && (
@@ -91,6 +90,7 @@ export function Kerangka({ menu, pengguna, bilah, children }: { menu: Menu; peng
   useEffect(() => setBuka(false), [path]);
   return (
     <div className="flex min-h-screen">
+      <PintasanCari />
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r border-garis bg-permukaan lg:block">
         <Navigasi menu={menu} pengguna={pengguna} />
       </aside>

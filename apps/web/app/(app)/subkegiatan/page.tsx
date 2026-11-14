@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { boleh } from '@danboy/core';
-import { daftarSubkegiatan } from '@danboy/core/services';
+import { batasUnggahMb, daftarSubkegiatan } from '@danboy/core/services';
+import { TombolImpor } from '@/components/impor';
+import { RiwayatImpor } from '@/components/riwayat-impor';
 import { Rupiah } from '@/components/domain';
 import { FilterSubkegiatan } from '@/components/filter';
 import { DrawerSubkegiatan } from '@/components/subkegiatan';
@@ -37,7 +39,20 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
       <KepalaHalaman
         judul="Subkegiatan"
         sub={`${tahapan.nama} · ${r.total} subkegiatan`}
-        aksi={<TautanTombol href={`/api/ekspor/subkegiatan?tahapanId=${tahapan._id}`}>Unduh Excel</TautanTombol>}
+        aksi={
+          <>
+            {boleh(user, 'impor') && (
+              <TombolImpor
+                jenis="apbd"
+                label="Impor rincian APBD dari SIPD"
+                batasMb={batasUnggahMb()}
+                tahapan={{ _id: String(tahapan._id), nama: tahapan.nama }}
+                nonaktif={tahapan.status === 'terbuka' ? undefined : `Tahapan ${tahapan.nama} tidak terbuka; impor ditolak (R10)`}
+              />
+            )}
+            <TautanTombol href={`/api/ekspor/subkegiatan?tahapanId=${tahapan._id}`}>Unduh Excel</TautanTombol>
+          </>
+        }
       />
       <FilterSubkegiatan user={user} sp={sp} dasar="/subkegiatan" />
       <Kartu padat>
@@ -100,6 +115,7 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
           <Kosong judul="Tidak ada subkegiatan">{Object.values(filter).some(Boolean) ? 'Ubah saringan untuk melihat data lain.' : 'Impor rincian APBD dari SIPD terlebih dahulu.'}</Kosong>
         )}
       </Kartu>
+      {boleh(user, 'impor') && <RiwayatImpor user={user} jenis="apbd" tahapanId={String(tahapan._id)} judul={`Riwayat impor APBD ${tahapan.nama}`} />}
       <DrawerSubkegiatan bolehUbah={boleh(user, 'ubah_alokasi')} />
     </>
   );

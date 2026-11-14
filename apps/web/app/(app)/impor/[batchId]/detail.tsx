@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { LABEL_ATURAN, StatusBatch, tanggal } from '@/components/domain';
-import { useToast } from '@/components/klien';
+import { Modal, useToast } from '@/components/klien';
+import { PanelRujukan, type Izin } from './rujukan';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Peringatan, Statistik, Tabel, TD, TH, Tombol, cx } from '@/components/ui';
 import { api, pesanGalat, rp } from '@/lib/klien';
 
@@ -38,7 +39,17 @@ interface Halaman {
 
 const ATURAN_FILTER = ['R7', 'R1', 'R2', 'R8', 'R0'];
 
-export function DetailImpor({ batchId, awal }: { batchId: string; awal: Batch }) {
+const KEMBALI: Record<string, [string, string]> = {
+  apbd: ['/subkegiatan', 'Subkegiatan'],
+  nomenklatur: ['/master/nomenklatur', 'Master nomenklatur'],
+  sumber_dana: ['/master/sumber-dana', 'Master sumber dana'],
+  tagging: ['/master/sumber-dana', 'Master sumber dana'],
+  rekening: ['/master/rekening', 'Master rekening'],
+  skpd: ['/master/skpd', 'Perangkat daerah'],
+};
+
+export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: string; awal: Batch; bolehKelola: boolean; izin: Izin }) {
+  const [bukaKonfirmasi, setBukaKonfirmasi] = useState(false);
   const [b, setB] = useState(awal);
   const [bagian, setBagian] = useState<'hasil' | 'ditahan' | 'baris'>(awal.jenis === 'apbd' ? 'hasil' : 'baris');
   const [aturan, setAturan] = useState('');
@@ -72,10 +83,10 @@ export function DetailImpor({ batchId, awal }: { batchId: string; awal: Batch })
     if (!berjalan) muatDaftar();
   }, [muatDaftar, berjalan]);
 
-  const jalankan = async (nama: string, path: string, pesan: string) => {
+  const jalankan = async (nama: string, path: string, pesan: string, body?: unknown) => {
     setAksi(nama);
     try {
-      await api(`/api/impor/${batchId}/${path}`, { method: 'POST' });
+      await api(`/api/impor/${batchId}/${path}`, { method: 'POST', body });
       toast(pesan);
       const r = await api<Halaman>(`/api/impor/${batchId}`);
       setB(r.batch);
@@ -90,6 +101,12 @@ export function DetailImpor({ batchId, awal }: { batchId: string; awal: Batch })
   const r = b.ringkasan ?? {};
   const apbd = b.jenis === 'apbd';
   const totalOp = r.operasi ? Object.values(r.operasi).reduce((x, y) => x + y, 0) : 0;
+  const ditahan = Number(r.barisDitahan ?? r.ditahan ?? r.barisGagal ?? 0);
+  const muatUlang = async () => {
+    const x = await api<Halaman>(`/api/impor/${batchId}`);
+    setB(x.batch);
+    router.refresh();
+  };
 
   return (
     <>
@@ -102,13 +119,13 @@ export function DetailImpor({ batchId, awal }: { batchId: string; awal: Batch })
             <span>
               diunggah {b.olehId?.nama} · {tanggal(b.createdAt, true)}
             </span>
-            <Link href="/impor" className="text-utama hover:underline">
-              ← Riwayat impor
+            <Link href={(KEMBALI[b.jenis] ?? ['/dasbor'])[0]} className="text-utama hover:underline">
+              ← {(KEMBALI[b.jenis] ?? ['', 'Dasbor'])[1]}
             </Link>
           </span>
         }
         aksi={
-          b.status === 'pratinjau' && !r.sedangDiterapkan ? (
+          !bolehKelola ? undefined : b.status === 'pratinjau' && !r.sedangDiterapkan ? (
             <>
               <Tombol onClick={() => jalankan('batal', 'batal', 'Pratinjau dibatalkan')} memuat={aksi === 'batal'} disabled={!!aksi}>
                 Batalkan
@@ -116,7 +133,12 @@ export function DetailImpor({ batchId, awal }: { batchId: string; awal: Batch })
               <Tombol onClick={() => jalankan('ulang', 'proses-ulang', 'Diproses ulang')} memuat={aksi === 'ulang'} disabled={!!aksi}>
                 Proses ulang
               </Tombol>
-              <Tombol varian="utama" onClick={() => jalankan('terapkan', 'terapkan', 'Sedang diterapkan…')} memuat={aksi === 'terapkan'} disabled={!!aksi}>
+              <Tombol
+                varian="utama"
+                onClick={() => (ditahan > 0 ? setBukaKonfirmasi(true) : jalankan('terapkan', 'terapkan', 'Sedang diterapkan…'))}
+                memuat={aksi === 'terapkan'}
+                disabled={!!aksi}
+              >
                 {r.tidakAdaPerubahan ? 'Tandai selesai' : `Terapkan ${totalOp ? `${totalOp} perubahan` : ''}`}
               </Tombol>
             </>
@@ -180,25 +202,21 @@ export function DetailImpor({ batchId, awal }: { batchId: string; awal: Batch })
           {r.temuan && Object.keys(r.temuan).length > 0 && (
             <div className="mb-4 flex flex-wrap gap-1.5">
               {Object.entries(r.temuan).map(([k, v]) => (
-                <Lencana key={k} nada={k === 'R2' || k === 'R8' ? 'waspada' : 'info'}>
-                  {k} {LABEL_ATURAN[k]}: {v}
+                <Lencana key={k} nada={k === 'R2' || k === 'R8' ? 'waspada' : 'info'} title={k}>
+                  {LABEL_ATURAN[k] ?? k}: {v}
                 </Lencana>
               ))}
             </div>
           )}
-          {r.kodeAsing && (r.kodeAsing.subkegiatan.length > 0 || r.kodeAsing.sumberDana.length > 0) && (
-            <div className="mb-4" id="ditahan">
-              <Peringatan nada="waspada" judul="R9: kode perlu dipetakan">
-                {r.kodeAsing.subkegiatan.length > 0 && <p>Kode subkegiatan tidak ada di nomenklatur aktif: {r.kodeAsing.subkegiatan.join(', ')}</p>}
-                {r.kodeAsing.sumberDana.length > 0 && <p>Kode sumber dana tidak ada di master: {r.kodeAsing.sumberDana.join(', ')}</p>}
-                <p className="mt-1">Baris tersebut ditahan. Tambahkan kode ke master, lalu klik Proses ulang.</p>
-              </Peringatan>
-            </div>
-          )}
-          {((r.skpdBaru as string[])?.length > 0 || (r.subUnitBaru as string[])?.length > 0) && (
-            <p className="mb-4 text-sm text-redup">
-              Dibuat otomatis: {(r.skpdBaru as string[]).length} SKPD, {(r.subUnitBaru as string[]).length} sub unit.
-            </p>
+          {(b.status === 'pratinjau' || b.status === 'diterapkan') && (
+            <PanelRujukan
+              batchId={batchId}
+              rujukan={r.rujukanHilang as never}
+              perbedaan={r.perbedaanNama as never}
+              izin={izin}
+              bisaUbah={b.status === 'pratinjau' && !r.sedangDiterapkan}
+              onBerubah={muatUlang}
+            />
           )}
         </>
       )}
@@ -252,9 +270,9 @@ export function DetailImpor({ batchId, awal }: { batchId: string; awal: Batch })
                       setPage(1);
                     }}
                     className={cx('rounded-full border px-2 py-0.5 text-xs', aturan === a ? 'border-utama bg-utama-lembut text-utama' : 'border-garis text-redup')}
-                    title={a ? LABEL_ATURAN[a] : undefined}
+                    title={a || undefined}
                   >
-                    {a || 'Semua'}
+                    {a ? LABEL_ATURAN[a] : 'Semua'}
                   </button>
                 ))}
               </div>
@@ -282,8 +300,8 @@ export function DetailImpor({ batchId, awal }: { batchId: string; awal: Batch })
                         <TD>
                           <div className="flex flex-wrap gap-1">
                             {h.aturan.split(',').map((a) => (
-                              <Lencana key={a} nada={a === 'R2' || a === 'R8' ? 'waspada' : a === 'R7' ? 'aman' : 'info'} title={LABEL_ATURAN[a]}>
-                                {a}
+                              <Lencana key={a} nada={a === 'R2' || a === 'R8' ? 'waspada' : a === 'R7' ? 'aman' : 'info'} title={a}>
+                                {LABEL_ATURAN[a] ?? a}
                               </Lencana>
                             ))}
                           </div>
@@ -345,6 +363,29 @@ export function DetailImpor({ batchId, awal }: { batchId: string; awal: Batch })
           )}
         </Kartu>
       )}
+      <Modal buka={bukaKonfirmasi} setBuka={setBukaKonfirmasi} judul="Terapkan tanpa baris yang ditahan?">
+        <div className="space-y-3 text-sm">
+          <p>
+            <b>{ditahan.toLocaleString('id-ID')} baris</b>
+            {typeof r.totalPaguDitahan === 'number' && <> dengan total pagu <b>{rp(r.totalPaguDitahan as number)}</b></>} ditahan karena rujukannya belum ada
+            di master atau datanya tidak valid. Baris tersebut <b>tidak akan ikut diimpor</b>.
+          </p>
+          <p className="text-redup">Untuk mengikutkannya, tambahkan dulu rujukannya ke master lalu proses ulang.</p>
+          <div className="flex justify-end gap-2 pt-1">
+            <Tombol onClick={() => setBukaKonfirmasi(false)}>Batal</Tombol>
+            <Tombol
+              varian="utama"
+              memuat={aksi === 'terapkan'}
+              onClick={async () => {
+                await jalankan('terapkan', 'terapkan', 'Sedang diterapkan…', { konfirmasi: true });
+                setBukaKonfirmasi(false);
+              }}
+            >
+              Ya, terapkan tanpa baris tersebut
+            </Tombol>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }

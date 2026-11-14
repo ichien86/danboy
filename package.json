@@ -16,6 +16,8 @@
     "format": "prettier --write .",
     "db:indexes": "tsx scripts/db-indexes.ts",
     "db:seed": "tsx scripts/db-seed.ts",
+    "akun:reset": "tsx scripts/reset-sandi.ts",
+    "data:pindah": "tsx scripts/pindah-data.ts",
     "fixtures": "tsx scripts/buat-fixture.ts"
   },
   "devDependencies": {

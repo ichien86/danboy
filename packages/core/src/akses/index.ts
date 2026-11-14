@@ -16,7 +16,9 @@ export type Aksi =
   | 'impor'
   | 'ubah_alokasi'
   | 'isi_pagu'
-  | 'kelola_master'
+  | 'kelola_skpd'
+  | 'kelola_nomenklatur'
+  | 'kelola_sumber_dana'
   | 'kelola_tahapan'
   | 'kelola_pengguna'
   | 'lihat_audit'
@@ -27,10 +29,15 @@ export type Aksi =
 const MATRIKS: Record<Aksi, readonly Peran[]> = {
   lihat: ['super_admin', 'admin', 'skpd'],
   ekspor: ['super_admin', 'admin', 'skpd'],
+  // impor rincian APBD, verifikasi SIPD, sumber dana, rekening, tagging (nomenklatur: kelola_nomenklatur)
   impor: ['super_admin', 'admin'],
   ubah_alokasi: ['super_admin', 'admin'],
   isi_pagu: ['super_admin', 'admin'],
-  kelola_master: ['super_admin', 'admin'],
+  // perangkat daerah (SKPD, sub unit) dan nomenklatur: kewenangan Super Admin
+  kelola_skpd: ['super_admin'],
+  kelola_nomenklatur: ['super_admin'],
+  // sumber dana, tagging, rekening: diampu Admin Keuangan
+  kelola_sumber_dana: ['super_admin', 'admin'],
   kelola_tahapan: ['super_admin'],
   kelola_pengguna: ['super_admin'],
   lihat_audit: ['super_admin', 'admin'],
@@ -66,3 +73,16 @@ export function dalamCakupan(user: SessionUser, dok: { skpdId?: unknown } | null
   if (user.peran !== 'skpd') return true;
   return String(dok.skpdId) === String(user.skpdId);
 }
+
+/** Izin yang dibutuhkan untuk mengunggah/menerapkan impor menurut jenisnya. */
+export function aksiImpor(jenis: string): Aksi {
+  if (jenis === 'nomenklatur') return 'kelola_nomenklatur';
+  if (jenis === 'skpd') return 'kelola_skpd';
+  return 'impor';
+}
+
+export const LABEL_PERAN: Record<Peran, string> = {
+  super_admin: 'Super Admin',
+  admin: 'Admin Keuangan',
+  skpd: 'SKPD',
+};

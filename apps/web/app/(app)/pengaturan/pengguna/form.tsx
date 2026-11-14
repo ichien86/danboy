@@ -98,7 +98,7 @@ export function FormPengguna({
             <Bidang label="Peran" htmlFor="peran">
               <Pilihan id="peran" value={peran} onChange={(e) => setPeran(e.target.value)} disabled={diriSendiri}>
                 <option value="super_admin">Super Admin</option>
-                <option value="admin">Admin</option>
+                <option value="admin">Admin Keuangan</option>
                 <option value="skpd">SKPD</option>
               </Pilihan>
             </Bidang>

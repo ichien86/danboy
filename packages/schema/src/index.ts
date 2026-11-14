@@ -7,26 +7,34 @@ export const objectId = z.string().regex(/^[0-9a-f]{24}$/i, 'ID tidak valid');
 
 export const peran = z.enum(['super_admin', 'admin', 'skpd']);
 export const jenisTahapan = z.enum(['KUA_PPAS', 'RAPBD', 'APBD', 'PERGESERAN', 'PERUBAHAN']);
-export const jenisImpor = z.enum(['apbd', 'nomenklatur', 'sumber_dana', 'rekening', 'tagging', 'verifikasi']);
+export const jenisImpor = z.enum(['apbd', 'nomenklatur', 'sumber_dana', 'rekening', 'tagging', 'verifikasi', 'skpd']);
 
 export const login = z.object({
   username: z.string().trim().min(1).max(64),
   password: z.string().min(1).max(256),
 });
 
+/** Syarat sandi baru: satu sumber untuk validasi server dan daftar cek di formulir. */
+export const ATURAN_SANDI: { kode: string; label: string; cek: (s: string) => boolean }[] = [
+  { kode: 'panjang', label: 'Minimal 10 karakter', cek: (s) => s.length >= 10 },
+  { kode: 'kecil', label: 'Ada huruf kecil (a–z)', cek: (s) => /[a-z]/.test(s) },
+  { kode: 'besar', label: 'Ada huruf besar (A–Z)', cek: (s) => /[A-Z]/.test(s) },
+  { kode: 'angka', label: 'Ada angka (0–9)', cek: (s) => /\d/.test(s) },
+];
+
 export const gantiSandi = z
   .object({
     sandiLama: z.string().min(1),
     sandiBaru: z
       .string()
-      .min(10, 'Minimal 10 karakter')
-      .max(128)
-      .regex(/[a-z]/, 'Harus ada huruf kecil')
-      .regex(/[A-Z]/, 'Harus ada huruf besar')
-      .regex(/\d/, 'Harus ada angka'),
+      .max(128, 'Maksimal 128 karakter')
+      .superRefine((s, ctx) => {
+        for (const a of ATURAN_SANDI) if (!a.cek(s)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: a.label });
+      }),
     ulangiSandi: z.string(),
   })
-  .refine((v) => v.sandiBaru === v.ulangiSandi, { message: 'Ulangi sandi tidak sama', path: ['ulangiSandi'] });
+  .refine((v) => v.sandiBaru === v.ulangiSandi, { message: 'Ulangi sandi tidak sama', path: ['ulangiSandi'] })
+  .refine((v) => v.sandiBaru !== v.sandiLama, { message: 'Sandi baru harus berbeda dari sandi lama', path: ['sandiBaru'] });
 
 export const paginasi = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -123,6 +131,23 @@ export const sumberDanaUbah = z
     aktif: z.boolean().optional(),
   })
   .strict();
+
+export const jenisNomenklatur = z.enum(['urusan', 'bidang', 'program', 'kegiatan', 'subkegiatan']);
+export const nomenklaturInput = z
+  .object({
+    jenis: jenisNomenklatur,
+    kode: z.string().trim().min(1).max(40),
+    nama: z.string().trim().min(1).max(500),
+  })
+  .strict();
+export const nomenklaturUbah = z
+  .object({ nama: z.string().trim().min(1).max(500).optional(), aktif: z.boolean().optional() })
+  .strict();
+
+export const rekeningInput = z
+  .object({ kode: z.string().trim().min(1).max(40).regex(/^[0-9.]+$/, 'Kode hanya angka dan titik'), nama: z.string().trim().min(1).max(500) })
+  .strict();
+export const rekeningUbah = z.object({ nama: z.string().trim().min(1).max(500) }).strict();
 
 export const taggingInput = z
   .object({

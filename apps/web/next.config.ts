@@ -1,5 +1,10 @@
 import path from 'node:path';
 import type { NextConfig } from 'next';
+import { config as muatEnv } from 'dotenv';
+
+// Satu tempat pengaturan: .env di akar repositori (MONGODB_URI, AUTH_SECRET, …). Nilai yang sudah ada
+// (dari apps/web/.env.local atau variabel lingkungan server/Docker) tidak ditimpa.
+muatEnv({ path: path.resolve(process.cwd(), '../../.env') });
 
 // Windows: terminal VS Code memberi cwd "c:\..." sedangkan symlink pnpm memakai "C:\...". Webpack lalu membundel
 // dua salinan modul klien Next.js ("multiple modules with names that only differ in casing") dan halaman crash

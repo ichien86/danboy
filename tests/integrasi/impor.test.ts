@@ -34,7 +34,7 @@ async function unggahDanTunggu(user: SessionUser, input: Parameters<typeof svc.u
   return (await ImporBatch.findById(b._id).lean())!;
 }
 async function terapkan(user: SessionUser, batchId: unknown) {
-  await svc.terapkanImpor(user, String(batchId));
+  await svc.terapkanImpor(user, String(batchId), { konfirmasi: true });
   await svc.tungguJobLokal();
   return (await ImporBatch.findById(batchId).lean())!;
 }
@@ -72,10 +72,41 @@ describe('alur impor end-to-end (service + model)', () => {
     await SumberDana.updateOne({ kode: '1.2.01.08.02' }, { $set: { khusus: true, namaTagging: 'DAU SG Kesehatan' } });
     expect(sg?.indukKode).toBe('1.2.01.08');
 
-    b = await unggahDanTunggu(admin, { jenis: 'nomenklatur', namaFile: 'nomenklatur.csv', versi: '900.1-861-2026', isi: baca('nomenklatur.csv') });
+    // nomenklatur: kewenangan Super Admin; Admin Keuangan ditolak mengunggah maupun menerapkan
+    const isiNomen = { jenis: 'nomenklatur' as const, namaFile: 'nomenklatur.csv', versi: '900.1-861-2026', isi: baca('nomenklatur.csv') };
+    await expect(svc.unggahImpor(admin, isiNomen)).rejects.toMatchObject({ http: 403 });
+    b = await unggahDanTunggu(sa, isiNomen);
     expect(b.status).toBe('pratinjau');
     expect((b.ringkasan.perJenis as Record<string, number>).subkegiatan).toBe(7);
-    await terapkan(admin, b._id);
+    await expect(svc.terapkanImpor(admin, String(b._id))).rejects.toMatchObject({ http: 403 });
+    await terapkan(sa, b._id);
+
+    // nomenklatur bisa ditambah/diubah manual oleh Super Admin; induk harus sudah ada
+    await expect(svc.buatNomenklatur(admin, { jenis: 'subkegiatan', kode: '1.01.02.2.01.0002', nama: 'X' })).rejects.toMatchObject({ http: 403 });
+    await expect(svc.buatNomenklatur(sa, { jenis: 'subkegiatan', kode: '9.99.99.2.01.0001', nama: 'Tanpa induk' })).rejects.toMatchObject({ http: 400 });
+    const nBaru = await svc.buatNomenklatur(sa, { jenis: 'subkegiatan', kode: '01.01.02.2.01.0002', nama: 'Rehabilitasi Sekolah' });
+    expect(nBaru).toMatchObject({ kode: '1.01.02.2.01.0002', indukKode: '1.01.02.2.01', versi: '900.1-861-2026', aktif: true });
+    await expect(svc.buatNomenklatur(sa, { jenis: 'subkegiatan', kode: '1.01.02.2.01.0002', nama: 'Ganda' })).rejects.toMatchObject({ http: 400 });
+    expect(await svc.ubahNomenklatur(sa, String(nBaru._id), { nama: 'Rehabilitasi Sekolah Dasar' })).toMatchObject({ nama: 'Rehabilitasi Sekolah Dasar' });
+    await svc.ubahNomenklatur(sa, String(nBaru._id), { aktif: false });
+
+    // rekening: Admin Keuangan
+    const rek = await svc.buatRekening(admin, { kode: '5.1.02.01.01.0026', nama: 'Belanja Alat Tulis Kantor' });
+    expect((await svc.ubahRekening(admin, String(rek._id), { nama: 'Belanja ATK' })).nama).toBe('Belanja ATK');
+    await expect(svc.buatRekening(admin, { kode: '5.1.02.01.01.0026', nama: 'Ganda' })).rejects.toMatchObject({ http: 400 });
+    expect((await svc.daftarRekening(admin, { q: '5.1.02' })).total).toBe(1);
+
+    // perangkat daerah: kewenangan Super Admin; sumber dana: Admin Keuangan
+    await expect(svc.buatSkpd(admin, { kode: '9.99', nama: 'Uji' })).rejects.toMatchObject({ http: 403 });
+    await expect(svc.ubahSumberDana(admin, String(sg!._id), { namaTagging: 'DAU SG Pendidikan' })).resolves.toBeTruthy();
+
+    // perangkat daerah: impor terpisah oleh Super Admin (file ekspor APBD SIPD bisa dipakai langsung)
+    await expect(svc.unggahImpor(admin, { jenis: 'skpd', namaFile: 'pd.csv', isi: baca('apbd-2027-kecil.csv') })).rejects.toMatchObject({ http: 403 });
+    b = await unggahDanTunggu(sa, { jenis: 'skpd', namaFile: 'perangkat-daerah.csv', isi: baca('apbd-2027-kecil.csv') });
+    expect(b.status).toBe('pratinjau');
+    expect(b.ringkasan).toMatchObject({ jumlahSkpd: 3, jumlahSubUnit: 4, baru: 7 });
+    await terapkan(sa, b._id);
+    expect(await Skpd.countDocuments()).toBe(3);
 
     b = await unggahDanTunggu(admin, { jenis: 'tagging', tahun: 2027, namaFile: 'tagging.csv', isi: baca('tagging.csv') });
     expect(b.status).toBe('pratinjau');
@@ -144,9 +175,11 @@ describe('alur impor end-to-end (service + model)', () => {
     const b = await unggahDanTunggu(admin, { jenis: 'apbd', tahapanId, namaFile: 'ganti.csv', isi });
     expect(b.status).toBe('pratinjau');
     expect(b.ringkasan.barisDitahan).toBe(1);
-    expect((b.ringkasan.kodeAsing as { subkegiatan: string[] }).subkegiatan).toEqual(['1.01.02.2.01.0099']);
+    expect((b.ringkasan.rujukanHilang as { subkegiatan: { kode: string }[] }).subkegiatan.map((x) => x.kode)).toEqual(['1.01.02.2.01.0099']);
     expect((b.ringkasan.temuan as Record<string, number>).R2).toBe(1);
     expect(await Notifikasi.countDocuments({ aturan: 'R9', status: 'terbuka' })).toBe(1);
+    // ada baris ditahan: terapkan wajib dikonfirmasi
+    await expect(svc.terapkanImpor(admin, String(b._id))).rejects.toMatchObject({ kode: 'PERLU_KONFIRMASI', http: 409 });
     await terapkan(admin, b._id);
 
     const beda = await svc.daftarPerbedaan(admin, tahapanId, {});
@@ -305,6 +338,72 @@ describe('alur impor end-to-end (service + model)', () => {
 
     const x = await svc.eksporVerifikasi(admin, String(b._id));
     expect(x.isi.readUInt32LE(0)).toBe(0x04034b50);
+  });
+
+  it('impor APBD tidak membuat master; rujukan hilang ditahan, nama SKPD beda diperingatkan, lalu dilengkapi sesuai kewenangan', async () => {
+    const pergeseran = (await Tahapan.findOne({ jenis: 'PERGESERAN', status: 'terbuka' }).lean())!;
+    const tid = String(pergeseran._id);
+    const jumlahSkpd = await Skpd.countDocuments();
+    const isi = ubahCsv((r) => [
+      ...r.map((x) => (x.includes('Alkes RSUD') ? x.replace(',Dinas Kesehatan,1.02.0.00.0.00.01.0001', ',DINAS KESEHATAN KAB. BOYOLALI,1.02.0.00.0.00.01.0001') : x)),
+      // sub unit belum ada di master
+      '2027,1,X,01.02,X,1.02.0.00.0.00.01.0000,Dinas Kesehatan,1.02.0.00.0.00.01.0003,UPT Puskesmas Cepogo,01.02.02,X,1.02.02.2.01,X,1.02.02.2.01.0026,Operasional Pelayanan Fasilitas Kesehatan Lainnya,1.1.01,PAD,5.1,X,P,X,p,1,1,"2.000"',
+      // subkegiatan belum ada di nomenklatur (induk kegiatan sudah ada)
+      '2027,1,URUSAN WAJIB,01.01,PENDIDIKAN,1.01.2.22.0.00.01.0000,Dinas Pendidikan dan Kebudayaan,1.01.2.22.0.00.01.0001,Dinas Pendidikan dan Kebudayaan,01.01.02,PROGRAM PENGELOLAAN PENDIDIKAN,1.01.02.2.01,Pengelolaan Pendidikan SD,1.01.02.2.01.0098,Rehabilitasi Ruang Kelas,1.2.01.01.01,DAU,5.2,X,P,X,p,1,1,"3.000"',
+      // sumber dana belum ada di master
+      '2027,1,X,01.01,X,1.01.2.22.0.00.01.0000,Dinas Pendidikan dan Kebudayaan,1.01.2.22.0.00.01.0001,Dinas Pendidikan dan Kebudayaan,01.01.02,X,1.01.02.2.01,X,1.01.02.2.01.0001,Pembangunan Unit Sekolah Baru (USB),1.2.03.01,Dana Insentif Fiskal,5.3,X,P,X,p,1,1,"4.000"',
+    ]);
+    let b = await unggahDanTunggu(admin, { jenis: 'apbd', tahapanId: tid, namaFile: 'rujukan.csv', isi });
+    expect(b.status).toBe('pratinjau');
+    expect(await Skpd.countDocuments()).toBe(jumlahSkpd); // tidak ada SKPD dibuat otomatis
+    const rh = b.ringkasan.rujukanHilang as Record<string, { kode: string }[]>;
+    expect(rh.subUnit.map((x) => x.kode)).toEqual(['1.02.0.00.0.00.01.0003']);
+    expect(rh.subkegiatan.map((x) => x.kode)).toEqual(['1.01.02.2.01.0098']);
+    expect(rh.sumberDana.map((x) => x.kode)).toEqual(['1.2.03.01']);
+    expect(b.ringkasan.barisDitahan).toBe(3);
+    expect((b.ringkasan.perbedaanNama as { skpd: unknown[] }).skpd).toHaveLength(1);
+    expect(await Notifikasi.countDocuments({ aturan: 'PD', batchId: b._id, status: 'terbuka' })).toBe(1);
+
+    // kewenangan melengkapi master
+    await expect(svc.lengkapiMasterDariImpor(admin, String(b._id), 'subkegiatan')).rejects.toMatchObject({ http: 403 });
+    await expect(svc.lengkapiMasterDariImpor(admin, String(b._id), 'perangkat_daerah')).rejects.toMatchObject({ http: 403 });
+    expect((await svc.lengkapiMasterDariImpor(admin, String(b._id), 'sumber_dana')).kode).toEqual(['1.2.03.01']);
+    await svc.tungguJobLokal();
+    expect((await svc.lengkapiMasterDariImpor(sa, String(b._id), 'subkegiatan')).kode).toEqual(['1.01.02.2.01.0098']);
+    await svc.tungguJobLokal();
+    expect((await svc.lengkapiMasterDariImpor(sa, String(b._id), 'perangkat_daerah')).kode).toEqual(['1.02.0.00.0.00.01.0003']);
+    await svc.tungguJobLokal();
+    b = (await ImporBatch.findById(b._id).lean())!;
+    expect(b.status).toBe('pratinjau');
+    expect(b.ringkasan.barisDitahan).toBe(0);
+    expect(await Notifikasi.countDocuments({ aturan: 'R9', batchId: b._id, status: 'terbuka' })).toBe(0);
+    await terapkan(admin, b._id);
+    expect(await SubkegiatanTahapan.exists({ tahapanId: tid, kodeSubkegiatan: '1.01.02.2.01.0098' })).toBeTruthy();
+  });
+
+  it('pindah data: seluruh isi database tersalin ke MongoDB tujuan beserta indeks', async () => {
+    // asinkron: execFileSync akan memblokir proses uji yang juga menjalankan mongod (log mongod tak terbaca -> macet)
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const jalankan = promisify(execFile);
+    const cli = join(__dirname, '..', '..', 'node_modules', 'tsx', 'dist', 'cli.mjs');
+    const skrip = join(__dirname, '..', '..', 'scripts', 'pindah-data.ts');
+    const dari = rs.getUri('danboy_uji');
+    const ke = rs.getUri('danboy_salinan');
+    const jalan = async (...a: string[]) => (await jalankan(process.execPath, [cli, skrip, '--dari', dari, '--ke', ke, ...a], { timeout: 50_000 })).stdout;
+    const keluaran = await jalan();
+    expect(keluaran).toMatch(/Selesai: .* dokumen dari \d+ koleksi disalin/);
+    const db = (await import('@danboy/db')).mongoose.connection.getClient();
+    const asal = db.db('danboy_uji');
+    const salin = db.db('danboy_salinan');
+    for (const n of ['subkegiatanTahapan', 'user', 'logAudit', 'hasilBanding', 'unggahan.files', 'unggahan.chunks']) {
+      expect(await salin.collection(n).countDocuments()).toBe(await asal.collection(n).countDocuments());
+    }
+    const idx = await salin.collection('subkegiatanTahapan').indexes();
+    expect(idx.some((i: { unique?: boolean; key: Record<string, unknown> }) => i.unique && 'tahapanId' in i.key && 'kodeSubkegiatan' in i.key)).toBe(true);
+    // tujuan sudah berisi: tanpa --timpa ditolak, dengan --timpa berhasil
+    await expect(jalan()).rejects.toMatchObject({ stderr: expect.stringMatching(/sudah berisi data/) });
+    expect(await jalan('--timpa')).toMatch(/Selesai/);
   });
 
   it('ekspor Excel menghasilkan file xlsx', async () => {
