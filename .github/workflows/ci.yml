@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  uji:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck && npx tsc -p tsconfig.json
+      - name: Uji unit + integrasi (mongodb-memory-server, replica set)
+        run: pnpm test
+      - name: Build web
+        run: pnpm build
+        env:
+          AUTH_SECRET: ci-only-secret-not-used-in-production
+      - name: Audit dependensi
+        run: pnpm audit --prod --audit-level high
+        continue-on-error: true

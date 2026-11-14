@@ -1,0 +1,39 @@
+{
+  "name": "danboy",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --filter @danboy/web dev",
+    "dev:db": "tsx scripts/dev-db.ts",
+    "dev:worker": "pnpm --filter @danboy/worker dev",
+    "build": "pnpm --filter @danboy/web build",
+    "start": "pnpm --filter @danboy/web start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "lint": "pnpm --filter @danboy/web lint",
+    "format": "prettier --write .",
+    "db:indexes": "tsx scripts/db-indexes.ts",
+    "db:seed": "tsx scripts/db-seed.ts",
+    "fixtures": "tsx scripts/buat-fixture.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "dotenv": "^16.4.7",
+    "mongodb-memory-server": "^10.1.4",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "@danboy/core": "workspace:*",
+    "@danboy/db": "workspace:*",
+    "@danboy/excel": "workspace:*",
+    "@danboy/schema": "workspace:*"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["mongodb-memory-server", "esbuild", "sharp", "@node-rs/argon2", "msgpackr-extract"]
+  }
+}

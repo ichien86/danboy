@@ -1,0 +1,316 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { SessionUser } from '@danboy/core';
+import * as svc from '@danboy/core/services';
+import {
+  HasilBanding,
+  ImporBatch,
+  LogAudit,
+  Notifikasi,
+  Skpd,
+  SubkegiatanTahapan,
+  SumberDana,
+  Tahapan,
+  User,
+  putus,
+  sambung,
+  semuaModel,
+} from '@danboy/db';
+
+const FIX = join(__dirname, '..', 'fixtures');
+const baca = (f: string) => readFileSync(join(FIX, f));
+const TOTAL_PAGU_FILE = 4_733_000_000;
+
+let rs: MongoMemoryReplSet;
+let sa: SessionUser;
+let admin: SessionUser;
+let tahapanId: string;
+
+async function unggahDanTunggu(user: SessionUser, input: Parameters<typeof svc.unggahImpor>[1]) {
+  const b = await svc.unggahImpor(user, input);
+  await svc.tungguJobLokal();
+  return (await ImporBatch.findById(b._id).lean())!;
+}
+async function terapkan(user: SessionUser, batchId: unknown) {
+  await svc.terapkanImpor(user, String(batchId));
+  await svc.tungguJobLokal();
+  return (await ImporBatch.findById(batchId).lean())!;
+}
+const ubahCsv = (fn: (baris: string[]) => string[]) => {
+  const [h, ...b] = baca('apbd-2027-kecil.csv').toString('utf8').trim().split(/\r?\n/);
+  return Buffer.from([h, ...fn(b)].join('\n'));
+};
+
+beforeAll(async () => {
+  rs = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } });
+  process.env.MONGODB_URI = rs.getUri('danboy_uji');
+  delete process.env.REDIS_URL;
+  await sambung();
+  await Promise.all(semuaModel.map((m) => m.syncIndexes()));
+  const u = await User.create({ username: 'sa', nama: 'Super Admin', peran: 'super_admin', passwordHash: await svc.hashSandi('Rahasia12345') });
+  sa = { id: String(u._id), username: 'sa', nama: 'Super Admin', peran: 'super_admin' };
+  const a = await User.create({ username: 'admin', nama: 'Admin', peran: 'admin', passwordHash: await svc.hashSandi('Rahasia12345') });
+  admin = { id: String(a._id), username: 'admin', nama: 'Admin', peran: 'admin' };
+});
+
+afterAll(async () => {
+  await putus();
+  await rs?.stop();
+});
+
+describe('alur impor end-to-end (service + model)', () => {
+  it('impor master sumber dana, nomenklatur, tagging', async () => {
+    let b = await unggahDanTunggu(admin, { jenis: 'sumber_dana', namaFile: 'sumber-dana.csv', isi: baca('sumber-dana.csv') });
+    expect(b.status).toBe('pratinjau');
+    expect(b.ringkasan.baru).toBe(7);
+    b = await terapkan(admin, b._id);
+    expect(b.status).toBe('diterapkan');
+    expect(await SumberDana.countDocuments()).toBe(7);
+    const sg = await SumberDana.findOneAndUpdate({ kode: '1.2.01.08.01' }, { $set: { khusus: true, namaTagging: 'DAU SG Pendidikan' } }, { new: true });
+    await SumberDana.updateOne({ kode: '1.2.01.08.02' }, { $set: { khusus: true, namaTagging: 'DAU SG Kesehatan' } });
+    expect(sg?.indukKode).toBe('1.2.01.08');
+
+    b = await unggahDanTunggu(admin, { jenis: 'nomenklatur', namaFile: 'nomenklatur.csv', versi: '900.1-861-2026', isi: baca('nomenklatur.csv') });
+    expect(b.status).toBe('pratinjau');
+    expect((b.ringkasan.perJenis as Record<string, number>).subkegiatan).toBe(7);
+    await terapkan(admin, b._id);
+
+    b = await unggahDanTunggu(admin, { jenis: 'tagging', tahun: 2027, namaFile: 'tagging.csv', isi: baca('tagging.csv') });
+    expect(b.status).toBe('pratinjau');
+    expect(b.ringkasan.belumDipetakan).toEqual(['DAU SG Pekerjaan Umum']);
+    expect(b.ringkasan.baru).toBe(3);
+    await terapkan(admin, b._id);
+  });
+
+  it('tahapan draf menolak impor (R10 / 423)', async () => {
+    const t = await svc.buatTahapan(sa, {
+      tahun: 2027,
+      jenis: 'APBD',
+      jadwalMulai: new Date(Date.now() + 86400_000),
+      jadwalSelesai: new Date(Date.now() + 30 * 86400_000),
+    });
+    tahapanId = String(t._id);
+    await expect(svc.unggahImpor(admin, { jenis: 'apbd', tahapanId, namaFile: 'a.csv', isi: baca('apbd-2027-kecil.csv') })).rejects.toMatchObject({
+      kode: 'TAHAPAN_TERKUNCI',
+      http: 423,
+    });
+    await svc.bukaTahapan(sa, tahapanId);
+    await svc.tungguJobLokal();
+    expect((await Tahapan.findById(tahapanId).lean())!.status).toBe('terbuka');
+  });
+
+  it('impor APBD: pratinjau tidak mengubah data, terapkan menyimpan; total pagu sama persis', async () => {
+    const b = await unggahDanTunggu(admin, { jenis: 'apbd', tahapanId, namaFile: 'apbd-2027-kecil.csv', isi: baca('apbd-2027-kecil.csv') });
+    expect(b.galat).toBeNull();
+    expect(b.status).toBe('pratinjau');
+    expect(b.ringkasan.barisOk).toBe(13);
+    expect(b.ringkasan.totalPaguFile).toBe(TOTAL_PAGU_FILE);
+    expect((b.ringkasan.operasi as Record<string, number>).tambah).toBe(7);
+    expect(await Skpd.countDocuments()).toBe(3);
+    expect(await SubkegiatanTahapan.countDocuments()).toBe(0);
+
+    const hasil = await terapkan(admin, b._id);
+    expect(hasil.status).toBe('diterapkan');
+    expect(await SubkegiatanTahapan.countDocuments({ tahapanId })).toBe(7);
+    const rekap = await svc.rekapSumberDana(admin, tahapanId);
+    expect(rekap.total.terpakai).toBe(TOTAL_PAGU_FILE);
+    const smp = await SubkegiatanTahapan.findOne({ kodeSubkegiatan: '1.01.02.2.02.0025' }).lean();
+    expect(smp!.alokasi).toHaveLength(2);
+    expect(smp!.pagu).toBe(350_000_000);
+    expect(smp!.seimbang).toBe(true);
+    expect(await LogAudit.countDocuments({ aksi: 'terapkan_impor' })).toBeGreaterThan(0);
+  });
+
+  it('impor ulang file yang sama menghasilkan nol operasi', async () => {
+    const b = await unggahDanTunggu(admin, { jenis: 'apbd', tahapanId, namaFile: 'apbd-2027-kecil.csv', isi: baca('apbd-2027-kecil.csv') });
+    expect(b.ringkasan.tidakAdaPerubahan).toBe(true);
+    // isi sama, file berbeda (urutan baris berbeda) -> tetap nol operasi lewat mesin pembanding
+    const b2 = await unggahDanTunggu(admin, { jenis: 'apbd', tahapanId, namaFile: 'dibalik.csv', isi: ubahCsv((r) => [...r].reverse()) });
+    expect(b2.status).toBe('pratinjau');
+    expect(b2.ringkasan.operasi).toEqual({ tambah: 0, ubah: 0, tandai_hilang: 0 });
+    await svc.batalImpor(admin, String(b2._id));
+  });
+
+  it('R2 ganti sumber dana + keputusan Ikut SIPD; R9 kode asing ditahan', async () => {
+    const isi = ubahCsv((r) =>
+      r
+        .map((x) => (x.includes('Seragam SD') ? x.replace('1.2.01.01.01,Dana Alokasi Umum (DAU)', '1.1.01,Pendapatan Asli Daerah (PAD)') : x))
+        .concat(
+          '2027,1,X,01.01,X,1.01.2.22.0.00.01.0000,Dinas Pendidikan dan Kebudayaan,1.01.2.22.0.00.01.0001,Dinas Pendidikan dan Kebudayaan,01.01.02,X,1.01.02.2.01,X,1.01.02.2.01.0099,Subkegiatan Asing,1.2.01.01.01,DAU,5.1,X,P,X,p,1,1,"1.000"',
+        ),
+    );
+    const b = await unggahDanTunggu(admin, { jenis: 'apbd', tahapanId, namaFile: 'ganti.csv', isi });
+    expect(b.status).toBe('pratinjau');
+    expect(b.ringkasan.barisDitahan).toBe(1);
+    expect((b.ringkasan.kodeAsing as { subkegiatan: string[] }).subkegiatan).toEqual(['1.01.02.2.01.0099']);
+    expect((b.ringkasan.temuan as Record<string, number>).R2).toBe(1);
+    expect(await Notifikasi.countDocuments({ aturan: 'R9', status: 'terbuka' })).toBe(1);
+    await terapkan(admin, b._id);
+
+    const beda = await svc.daftarPerbedaan(admin, tahapanId, {});
+    expect(beda.total).toBe(1);
+    expect(await Notifikasi.countDocuments({ aturan: 'R2', status: 'terbuka' })).toBe(1);
+    await svc.ikutSipd(admin, String(beda.data[0]._id));
+    const d = await SubkegiatanTahapan.findById(beda.data[0]._id).lean();
+    expect(d!.beda.ada).toBe(false);
+    expect(d!.beda.diputuskan).toBe('ikut_sipd');
+    expect(await Notifikasi.countDocuments({ aturan: 'R2', status: 'terbuka' })).toBe(0);
+  });
+
+  it('ubah alokasi: konkurensi optimistis, R4, R3 tanpa mengunci', async () => {
+    const d = (await SubkegiatanTahapan.findOne({ kodeSubkegiatan: '2.07.04.2.01.0001' }).lean())!;
+    const dau = (await SumberDana.findOne({ kode: '1.2.01.01.01' }).lean())!;
+    await svc.simpanPaguSumberDana(admin, tahapanId, [{ sumberDanaId: String(dau._id), nilai: 100_000_000 }]);
+    const r = await svc.ubahAlokasi(admin, String(d._id), {
+      updatedAt: new Date(d.updatedAt).toISOString(),
+      alokasi: [{ sumberDanaId: String(dau._id), nilai: 50_000_000 }],
+    });
+    expect(r.dokumen.seimbang).toBe(false);
+    expect(r.peringatan[0]).toMatchObject({ sumberDana: 'Dana Alokasi Umum (DAU)' });
+    expect(await Notifikasi.countDocuments({ aturan: 'R4', status: 'terbuka' })).toBe(1);
+    expect(await Notifikasi.countDocuments({ aturan: 'R3', status: 'terbuka' })).toBe(1);
+    await expect(
+      svc.ubahAlokasi(admin, String(d._id), { updatedAt: new Date(d.updatedAt).toISOString(), alokasi: [] }),
+    ).rejects.toMatchObject({ kode: 'DATA_BERUBAH' });
+  });
+
+  it('akun SKPD tidak bisa membaca atau mengubah data SKPD lain', async () => {
+    const dinkes = (await Skpd.findOne({ kode: '1.02.0.00.0.00.01.0000' }).lean())!;
+    const skpd: SessionUser = { id: admin.id, username: 'dinkes', nama: 'Dinkes', peran: 'skpd', skpdId: String(dinkes._id) };
+    const daftar = await svc.daftarSubkegiatan(skpd, tahapanId, {});
+    expect(daftar.total).toBe(2);
+    expect((daftar.data as unknown as { skpdId: { _id: string } }[]).every((x) => String(x.skpdId._id) === String(dinkes._id))).toBe(true);
+    const lain = (await SubkegiatanTahapan.findOne({ skpdId: { $ne: dinkes._id } }).lean())!;
+    await expect(svc.detailSubkegiatan(skpd, String(lain._id))).rejects.toMatchObject({ http: 404 });
+    await expect(
+      svc.ubahAlokasi(skpd, String(lain._id), { updatedAt: new Date().toISOString(), alokasi: [] }),
+    ).rejects.toMatchObject({ http: 403 });
+    await expect(svc.unggahImpor(skpd, { jenis: 'apbd', tahapanId, namaFile: 'a.csv', isi: Buffer.from('x') })).rejects.toMatchObject({ http: 403 });
+    const rekap = await svc.rekapSumberDana(skpd, tahapanId);
+    expect(rekap.baris.every((b) => b.terpakaiSkpd !== undefined)).toBe(true);
+  });
+
+  it('kegagalan di tengah job terapkan meninggalkan data persis seperti sebelum impor', async () => {
+    const sebelum = await SubkegiatanTahapan.find({ tahapanId }).sort({ _id: 1 }).lean();
+    const isi = ubahCsv((r) => r.map((x) => x.replace('"1.500.000.000","1.500.000.000"', '"1.600.000.000","1.600.000.000"').replace('"95.500.000","95.500.000"', '"99.000.000","99.000.000"')));
+    const b = await unggahDanTunggu(admin, { jenis: 'apbd', tahapanId, namaFile: 'gagal.csv', isi });
+    expect(b.status).toBe('pratinjau');
+    await expect(svc.terapkanApbd(String(b._id), { gagalkanSetelah: 1 })).rejects.toThrow('Simulasi');
+    const sesudah = await SubkegiatanTahapan.find({ tahapanId }).sort({ _id: 1 }).lean();
+    expect(JSON.stringify(sesudah)).toBe(JSON.stringify(sebelum));
+    expect((await ImporBatch.findById(b._id).lean())!.status).toBe('gagal');
+  });
+
+  it('mutasi pada tahapan ditutup selalu ditolak 423; tahapan baru menyalin data', async () => {
+    const d = (await SubkegiatanTahapan.findOne({ tahapanId }).lean())!;
+    await svc.tutupTahapan(sa, tahapanId);
+    await expect(
+      svc.ubahAlokasi(admin, String(d._id), { updatedAt: new Date(d.updatedAt).toISOString(), alokasi: [] }),
+    ).rejects.toMatchObject({ http: 423 });
+    await expect(svc.ikutSipd(admin, String(d._id))).rejects.toMatchObject({ http: 423 });
+    await expect(svc.simpanPaguSumberDana(admin, tahapanId, [])).rejects.toMatchObject({ http: 423 });
+
+    const p = await svc.buatTahapan(sa, {
+      tahun: 2027,
+      jenis: 'PERGESERAN',
+      jadwalMulai: new Date(Date.now() - 1000),
+      jadwalSelesai: new Date(Date.now() + 86400_000),
+    });
+    expect(p.nama).toBe('Pergeseran I 2027');
+    const hasil = await svc.jalankanJadwal();
+    expect(hasil.dibuka).toBe(1);
+    const baru = (await Tahapan.findById(p._id).lean())!;
+    expect(baru.status).toBe('terbuka');
+    expect(String(baru.disalinDari)).toBe(tahapanId);
+    expect(await SubkegiatanTahapan.countDocuments({ tahapanId: p._id })).toBe(await SubkegiatanTahapan.countDocuments({ tahapanId }));
+  });
+
+  it('login: kunci 15 menit setelah 5 kali gagal', async () => {
+    for (let i = 0; i < 4; i++) expect((await svc.verifikasiLogin('admin', 'salah')).alasan).toBe('salah');
+    const r = await svc.verifikasiLogin('admin', 'salah');
+    expect(r.alasan).toBe('terkunci');
+    expect((await svc.verifikasiLogin('admin', 'Rahasia12345')).alasan).toBe('terkunci');
+    expect((await svc.verifikasiLogin('sa', 'Rahasia12345')).ok).toBe(true);
+  });
+
+  it('verifikasi SIPD: aplikasi jadi acuan, data tidak berubah, bisa pada tahapan ditutup, notifikasi per SKPD', async () => {
+    // Kondisi aplikasi saat ini: Seragam SD (1.01.02.2.01.0025) sudah Ikut SIPD -> PAD; pelatihan (2.07...) diedit Admin -> DAU 50 jt.
+    const isi = ubahCsv((r) =>
+      r
+        .filter((x) => !x.includes('2.07.04.2.01.0001'))
+        .map((x) => (x.includes('Alkes RSUD') ? x.replace('"780.000.000","780.000.000"', '"800.000.000","800.000.000"') : x))
+        .concat(
+          '2027,1,X,01.01,X,1.01.2.22.0.00.01.0000,Dinas Pendidikan dan Kebudayaan,1.01.2.22.0.00.01.0001,Dinas Pendidikan dan Kebudayaan,01.01.02,X,1.01.02.2.01,X,1.01.02.2.01.0099,Subkegiatan Baru di SIPD,1.2.01.01.01,DAU,5.1,X,P,X,p,1,1,"5.000"',
+        ),
+    );
+    const sebelum = await SubkegiatanTahapan.find({ tahapanId }).sort({ _id: 1 }).lean();
+    expect((await Tahapan.findById(tahapanId).lean())!.status).toBe('ditutup');
+    const b = await unggahDanTunggu(admin, { jenis: 'verifikasi', tahapanId, namaFile: 'cek-sipd.csv', isi });
+    expect(b.galat).toBeNull();
+    expect(b.status).toBe('selesai');
+    expect(b.ringkasan.perStatus).toEqual({ sesuai: 4, nilai_berbeda: 1, sumber_dana_berbeda: 1, tidak_ada_di_sipd: 1, tidak_ada_di_aplikasi: 1 });
+    expect(JSON.stringify(await SubkegiatanTahapan.find({ tahapanId }).sort({ _id: 1 }).lean())).toBe(JSON.stringify(sebelum));
+
+    const r = await svc.hasilVerifikasi(admin, String(b._id), { status: 'sumber_dana_berbeda' });
+    expect(r.data).toHaveLength(1);
+    const v = r.data[0].verifikasi as unknown as { rincianSalah: { kodeSumberDana: string; pagu: number }[]; baris: { kodeSumberDana: string; selisih: number }[] };
+    expect(r.data[0].kodeSubkegiatan).toBe('1.01.02.2.01.0025');
+    expect(v.rincianSalah).toEqual([expect.objectContaining({ kodeSumberDana: '1.2.01.01.01', pagu: 350_000_000 })]);
+    const nilai = await svc.hasilVerifikasi(admin, String(b._id), { status: 'nilai_berbeda' });
+    expect((nilai.data[0].verifikasi as unknown as { baris: { selisih: number }[] }).baris.map((x) => x.selisih)).toContain(20_000_000);
+
+    // notifikasi VS per SKPD bermasalah (Disdik, Dinkes, Disnaker)
+    expect(await Notifikasi.countDocuments({ aturan: 'VS', status: 'terbuka' })).toBe(3);
+
+    // akun SKPD hanya melihat hasil SKPD-nya
+    const dinkes = (await Skpd.findOne({ kode: '1.02.0.00.0.00.01.0000' }).lean())!;
+    const skpd: SessionUser = { id: admin.id, username: 'dinkes', nama: 'Dinkes', peran: 'skpd', skpdId: String(dinkes._id) };
+    const milik = await svc.hasilVerifikasi(skpd, String(b._id), {});
+    expect(milik.total).toBe(2);
+    expect((milik.batch.ringkasan as { perSkpd: unknown[] }).perSkpd).toHaveLength(1);
+    await expect(svc.unggahImpor(skpd, { jenis: 'verifikasi', tahapanId, namaFile: 'a.csv', isi })).rejects.toMatchObject({ http: 403 });
+
+    // centang pengingat "sudah disesuaikan di SIPD" oleh SKPD
+    const belum = await svc.hasilVerifikasi(skpd, String(b._id), { status: 'tidak_sesuai', tandai: 'belum' });
+    expect(belum.total).toBe(1);
+    const lain = await HasilBanding.findOne({ batchId: b._id, aturan: { $ne: 'sesuai' }, skpdId: { $ne: dinkes._id } }).lean();
+    await expect(svc.tandaiHasilVerifikasi(skpd, String(b._id), String(lain!._id), true)).rejects.toMatchObject({ http: 404 });
+    const t1 = await svc.tandaiHasilVerifikasi(skpd, String(b._id), String(belum.data[0]._id), true);
+    expect(t1.progres).toMatchObject({ tidakSesuai: 1, ditandai: 1, sisa: 0 });
+    expect((await svc.hasilVerifikasi(skpd, String(b._id), { status: 'tidak_sesuai', tandai: 'belum' })).total).toBe(0);
+    const kunciDinkes = `VS:${tahapanId}:${dinkes._id}`;
+    expect(await Notifikasi.countDocuments({ kunciUnik: kunciDinkes, status: 'terbuka' })).toBe(0);
+    expect(await Notifikasi.countDocuments({ aturan: 'VS', status: 'terbuka' })).toBe(2);
+    expect(await LogAudit.countDocuments({ aksi: 'tandai_sudah_disesuaikan_sipd' })).toBe(1);
+    // batal centang membuka lagi pengingatnya
+    await svc.tandaiHasilVerifikasi(skpd, String(b._id), String(belum.data[0]._id), false);
+    const n = await Notifikasi.findOne({ kunciUnik: kunciDinkes, status: 'terbuka' }).lean();
+    expect(n?.pesan).toMatch(/^1 subkegiatan Dinas Kesehatan belum sama sumber dananya/);
+    // centang lagi; "Cek ulang" batch yang sama mempertahankan centang karena temuannya tidak berubah
+    await svc.tandaiHasilVerifikasi(skpd, String(b._id), String(belum.data[0]._id), true);
+    await svc.prosesUlangImpor(admin, String(b._id));
+    await svc.tungguJobLokal();
+    expect((await svc.hasilVerifikasi(skpd, String(b._id), { status: 'tidak_sesuai', tandai: 'sudah' })).total).toBe(1);
+    expect(await Notifikasi.countDocuments({ kunciUnik: kunciDinkes, status: 'terbuka' })).toBe(0);
+
+    // verifikasi ulang dengan file yang sesuai menutup notifikasi VS
+    const sesuai = ubahCsv((r) =>
+      r.map((x) => (x.includes('Seragam SD') ? x.replace('1.2.01.01.01,Dana Alokasi Umum (DAU)', '1.1.01,Pendapatan Asli Daerah (PAD)') : x)).filter((x) => !x.includes('2.07.04.2.01.0001')),
+    );
+    const b2 = await unggahDanTunggu(admin, { jenis: 'verifikasi', tahapanId, namaFile: 'cek-2.csv', isi: sesuai });
+    expect((b2.ringkasan.perStatus as Record<string, number>).sumber_dana_berbeda).toBe(0);
+    expect(await Notifikasi.countDocuments({ aturan: 'VS', status: 'terbuka' })).toBe(1); // hanya Disnaker (tidak ada di SIPD)
+
+    const x = await svc.eksporVerifikasi(admin, String(b._id));
+    expect(x.isi.readUInt32LE(0)).toBe(0x04034b50);
+  });
+
+  it('ekspor Excel menghasilkan file xlsx', async () => {
+    const e = await svc.ekspor(admin, 'matriks', tahapanId);
+    expect(e.isi.readUInt32LE(0)).toBe(0x04034b50);
+    const r = await svc.ekspor(admin, 'rekap', tahapanId);
+    expect(r.namaFile).toMatch(/rekap/);
+  });
+});

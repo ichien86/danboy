@@ -1,0 +1,8 @@
+{
+  "name": "@danboy/db",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc -p tsconfig.json" },
+  "dependencies": { "mongoose": "^8.9.0" }
+}

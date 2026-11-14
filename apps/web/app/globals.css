@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Token warna dalam RGB agar bisa diberi alfa oleh Tailwind. */
+:root {
+  --latar: 245 246 248;
+  --permukaan: 255 255 255;
+  --garis: 223 227 233;
+  --teks: 22 27 34;
+  --redup: 92 101 114;
+  --utama: 22 94 170;
+  --utama-teks: 255 255 255;
+  --utama-lembut: 230 239 250;
+  --aman: 21 128 61;
+  --aman-lembut: 225 245 233;
+  --waspada: 161 98 7;
+  --waspada-lembut: 254 243 214;
+  --bahaya: 190 30 45;
+  --bahaya-lembut: 253 230 232;
+  --info: 55 90 160;
+  --info-lembut: 232 238 250;
+  color-scheme: light;
+}
+
+.dark {
+  --latar: 15 18 23;
+  --permukaan: 24 28 35;
+  --garis: 45 52 63;
+  --teks: 230 234 240;
+  --redup: 152 161 175;
+  --utama: 96 160 235;
+  --utama-teks: 10 20 35;
+  --utama-lembut: 28 44 68;
+  --aman: 86 196 128;
+  --aman-lembut: 22 48 33;
+  --waspada: 232 176 74;
+  --waspada-lembut: 55 42 18;
+  --bahaya: 244 112 118;
+  --bahaya-lembut: 62 24 28;
+  --info: 140 170 235;
+  --info-lembut: 30 38 60;
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: rgb(var(--latar));
+  color: rgb(var(--teks));
+}
+
+body {
+  font-feature-settings: 'tnum' 1;
+}
+
+.angka {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--utama));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

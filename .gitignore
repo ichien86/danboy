@@ -1,0 +1,12 @@
+node_modules
+.next
+.data
+.env
+.env.local
+coverage
+*.log
+apps/web/next-env.d.ts
+deploy/.env
+deploy/tls/
+deploy/mongo-keyfile
+*.tsbuildinfo

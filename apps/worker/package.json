@@ -1,0 +1,20 @@
+{
+  "name": "@danboy/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env index.ts",
+    "start": "tsx index.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@danboy/core": "workspace:*",
+    "@danboy/db": "workspace:*",
+    "bullmq": "^5.34.0",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}
