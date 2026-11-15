@@ -90,6 +90,9 @@ pada server lama tanpa AVX, ganti ke `mongo:4.4` di `deploy/docker-compose.yml`.
 
 Panduan lengkap hosting gratis di Oracle Cloud (membuat VM, subdomain, HTTPS): [deploy/HOSTING-ORACLE.md](deploy/HOSTING-ORACLE.md).
 
+Alternatif: aplikasi di **Netlify** dengan database **MongoDB Atlas**, sedangkan impor, verifikasi, dan buka tahapan
+dikerjakan dari aplikasi lokal yang terhubung ke Atlas yang sama: [deploy/HOSTING-NETLIFY.md](deploy/HOSTING-NETLIFY.md).
+
 **Pemasangan pertama** (database dimulai kosong; data contoh di komputer pengembangan tidak ikut):
 
 ```bash

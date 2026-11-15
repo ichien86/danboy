@@ -1,0 +1,14 @@
+# Netlify: aplikasi web DANBOY (Next.js) di monorepo pnpm. Database tetap di MongoDB Atlas.
+# Pengaturan situs di Netlify: Base directory = (kosong), Package directory = apps/web.
+# Netlify mengenali Next.js dan memasang adapter-nya otomatis; direktori publish diatur adapter.
+# Panduan lengkap: deploy/HOSTING-NETLIFY.md
+
+[build]
+  # dijalankan dari akar repositori (base directory); pnpm memasang seluruh workspace
+  command = "pnpm --filter @danboy/web build"
+
+[build.environment]
+  NODE_VERSION = "22"
+  NEXT_TELEMETRY_DISABLED = "1"
+  # jangan unduh biner mongod milik mongodb-memory-server (hanya untuk uji) saat build
+  MONGOMS_DISABLE_POSTINSTALL = "1"
