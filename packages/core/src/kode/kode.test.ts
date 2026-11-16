@@ -57,7 +57,9 @@ describe('rekap', () => {
     expect(statusSumberDana(undefined, 10)).toBe('pagu_belum_diisi');
     expect(statusSumberDana(100, 101)).toBe('melebihi');
     expect(statusSumberDana(100, 90)).toBe('mendekati');
-    expect(statusSumberDana(100, 100)).toBe('mendekati');
+    expect(statusSumberDana(100, 100)).toBe('komplit');
+    expect(statusSumberDana(100, 99)).toBe('mendekati');
+    expect(statusSumberDana(0, 0)).toBe('aman');
     expect(statusSumberDana(100, 89)).toBe('aman');
   });
   it('rekap baris SIPD per subkegiatan, total sama persis', () => {

@@ -35,6 +35,7 @@ export default async function RekapSumberDana({ searchParams }: { searchParams: 
         {[
           ['', `Semua (${r.baris.length})`],
           ['melebihi', `Melebihi (${r.total.melebihi})`],
+          ['komplit', `Komplit (${r.total.komplit})`],
           ['mendekati', `Mendekati (${r.total.mendekati})`],
           ['pagu_belum_diisi', `Pagu belum diisi (${r.total.belumDiisi})`],
         ].map(([v, l]) => (

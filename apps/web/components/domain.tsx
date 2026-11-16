@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleDashed, OctagonAlert, Tag } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CircleCheckBig, CircleDashed, OctagonAlert, Tag } from 'lucide-react';
 import { formatRupiah, type StatusSumberDana as Status } from '@danboy/core';
 import { Lencana, cx } from './ui';
 
@@ -11,9 +11,10 @@ export function Rupiah({ nilai, juta, className, negatifMerah = true }: { nilai:
   );
 }
 
-const STATUS: Record<Status, { label: string; nada: 'aman' | 'waspada' | 'bahaya' | 'netral'; ikon: typeof CheckCircle2 }> = {
+const STATUS: Record<Status, { label: string; nada: 'aman' | 'waspada' | 'bahaya' | 'netral' | 'info'; ikon: typeof CheckCircle2 }> = {
   aman: { label: 'Aman', nada: 'aman', ikon: CheckCircle2 },
   mendekati: { label: 'Mendekati', nada: 'waspada', ikon: AlertTriangle },
+  komplit: { label: 'Komplit', nada: 'info', ikon: CircleCheckBig },
   melebihi: { label: 'Melebihi', nada: 'bahaya', ikon: OctagonAlert },
   pagu_belum_diisi: { label: 'Pagu belum diisi', nada: 'netral', ikon: CircleDashed },
 };

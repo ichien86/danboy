@@ -59,7 +59,7 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
         <Statistik
           label="Sumber dana melebihi pagu"
           nilai={r.totalRekap.melebihi}
-          sub={`${r.totalRekap.mendekati} mendekati · ${r.totalRekap.belumDiisi} pagu belum diisi`}
+          sub={`${r.totalRekap.komplit} komplit · ${r.totalRekap.mendekati} mendekati · ${r.totalRekap.belumDiisi} pagu belum diisi`}
           nada={r.totalRekap.melebihi ? 'bahaya' : 'aman'}
         />
       </div>
@@ -113,7 +113,7 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
             </thead>
             <tbody>
               {r.rekap
-                .filter((b) => b.status !== 'aman')
+                .filter((b) => b.status !== 'aman' && b.status !== 'komplit')
                 .slice(0, 8)
                 .map((b) => (
                   <tr key={b.sumberDanaId}>
@@ -130,10 +130,10 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
                     </TD>
                   </tr>
                 ))}
-              {!r.rekap.some((b) => b.status !== 'aman') && (
+              {!r.rekap.some((b) => b.status !== 'aman' && b.status !== 'komplit') && (
                 <tr>
                   <TD colSpan={3} className="py-6 text-center text-redup">
-                    Semua sumber dana berstatus aman.
+                    Semua sumber dana berstatus aman atau komplit.
                   </TD>
                 </tr>
               )}

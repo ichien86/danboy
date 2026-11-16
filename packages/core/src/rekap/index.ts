@@ -1,12 +1,14 @@
 import type { AlokasiSipd, DataSipd, Rincian } from '../pembanding';
 import { kunciSubkegiatan, urutkan } from '../pembanding';
 
-export type StatusSumberDana = 'pagu_belum_diisi' | 'melebihi' | 'mendekati' | 'aman';
+export type StatusSumberDana = 'pagu_belum_diisi' | 'melebihi' | 'komplit' | 'mendekati' | 'aman';
 
 /** Status per sumber dana (Bagian 9). Pelanggaran pagu tidak pernah mengunci, hanya memicu R3. */
 export function statusSumberDana(pagu: number | null | undefined, terpakai: number, ambangPersen = 90): StatusSumberDana {
   if (pagu === null || pagu === undefined) return 'pagu_belum_diisi';
   if (terpakai > pagu) return 'melebihi';
+  // tepat 100%: pagu sumber dana habis teralokasi seluruhnya
+  if (pagu > 0 && terpakai === pagu) return 'komplit';
   if (pagu > 0 && terpakai * 100 >= pagu * ambangPersen) return 'mendekati';
   if (pagu === 0 && terpakai === 0) return 'aman';
   return 'aman';

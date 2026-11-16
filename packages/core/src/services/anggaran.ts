@@ -94,6 +94,7 @@ export async function rekapSumberDana(user: SessionUser, tahapanId: string) {
     terpakai: baris.reduce((a, b) => a + b.terpakai, 0),
     melebihi: baris.filter((b) => b.status === 'melebihi').length,
     mendekati: baris.filter((b) => b.status === 'mendekati').length,
+    komplit: baris.filter((b) => b.status === 'komplit').length,
     belumDiisi: baris.filter((b) => b.status === 'pagu_belum_diisi').length,
   };
   return { tahapan: ser(t), baris, total, ambang };

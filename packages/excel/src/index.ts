@@ -227,3 +227,16 @@ export async function buatXlsx(sheets: SheetEkspor[]): Promise<Buffer> {
   }
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
+
+/** Baca semua sheet .xlsx secara utuh (untuk file kecil/menengah yang butuh lebih dari satu sheet). */
+export async function bacaSemuaSheet(isi: Buffer): Promise<Record<string, Sel[][]>> {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(isi as unknown as ArrayBuffer);
+  const hasil: Record<string, Sel[][]> = {};
+  for (const ws of wb.worksheets) {
+    const baris: Sel[][] = [];
+    for (let r = 1; r <= ws.rowCount; r++) baris.push(ubahBaris(ws.getRow(r).values as ExcelJS.CellValue[]));
+    hasil[ws.name] = baris;
+  }
+  return hasil;
+}

@@ -31,6 +31,7 @@ export async function daftarAudit(
 const LABEL_STATUS: Record<string, string> = {
   aman: 'Aman',
   mendekati: 'Mendekati pagu',
+  komplit: 'Komplit (100%)',
   melebihi: 'Melebihi pagu',
   pagu_belum_diisi: 'Pagu belum diisi',
 };

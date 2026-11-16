@@ -18,6 +18,7 @@
     "db:seed": "tsx scripts/db-seed.ts",
     "akun:reset": "tsx scripts/reset-sandi.ts",
     "data:pindah": "tsx scripts/pindah-data.ts",
+    "data:awal": "tsx scripts/impor-data-awal.ts",
     "fixtures": "tsx scripts/buat-fixture.ts"
   },
   "devDependencies": {
