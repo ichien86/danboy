@@ -476,4 +476,48 @@ describe('alur impor end-to-end (service + model)', () => {
     const r = await svc.ekspor(admin, 'rekap', tahapanId);
     expect(r.namaFile).toMatch(/rekap/);
   });
+
+  it('tambah subkegiatan manual: kode dari master, X.XX diganti bidang urusan, info tagging, hanya Admin', async () => {
+    const { Nomenklatur, SubUnit } = await import('@danboy/db');
+    const t = (await Tahapan.findOne({ status: 'terbuka' }).sort({ _id: -1 }).lean())!;
+    const tid = String(t._id);
+    const subUnit = (await SubUnit.find().sort({ kode: 1 }).lean())[0];
+    const bidang = (await svc.daftarBidangUrusan(admin))[0];
+    expect(bidang.kode).not.toMatch(/^X/);
+    expect(await Nomenklatur.exists({ kode: bidang.kode, jenis: 'bidang' })).toBeTruthy();
+
+    // pencarian hanya mengembalikan subkegiatan di master; kode X.XX ditandai templat
+    const cari = await svc.calonSubkegiatan(admin, tid, { q: 'gaji' });
+    expect(cari).toMatchObject({ data: [{ kode: 'X.XX.01.2.02.0001', templat: true }] });
+
+    // akun SKPD ditolak
+    const skpd: SessionUser = { id: admin.id, username: 'skpd', nama: 'SKPD', peran: 'skpd', skpdId: String(subUnit.skpdId) };
+    const masukan = { subUnitId: String(subUnit._id), kodeNomenklatur: 'X.XX.01.2.02.0001', kodeBidang: bidang.kode, pagu: 5_000_000 };
+    await expect(svc.tambahSubkegiatan(skpd, tid, masukan)).rejects.toMatchObject({ http: 403 });
+    await expect(svc.calonSubkegiatan(skpd, tid, { q: 'gaji' })).rejects.toMatchObject({ http: 403 });
+
+    // X.XX tanpa bidang urusan, bidang tak dikenal, kode di luar master: ditolak
+    await expect(svc.tambahSubkegiatan(admin, tid, { ...masukan, kodeBidang: null })).rejects.toMatchObject({ http: 400 });
+    await expect(svc.tambahSubkegiatan(admin, tid, { ...masukan, kodeBidang: '9.99' })).rejects.toMatchObject({ http: 400 });
+    await expect(svc.tambahSubkegiatan(admin, tid, { ...masukan, kodeNomenklatur: '9.99.99.2.01.0001' })).rejects.toMatchObject({ http: 400 });
+
+    const kode = `${bidang.kode}.01.2.02.0001`;
+    await SubkegiatanTahapan.deleteMany({ tahapanId: t._id, subUnitId: subUnit._id, kodeSubkegiatan: kode });
+    const r = await svc.tambahSubkegiatan(admin, tid, masukan);
+    expect(r.dokumen).toMatchObject({ kodeSubkegiatan: kode, namaSubkegiatan: 'Penyediaan Gaji dan Tunjangan ASN', pagu: 5_000_000, seimbang: false, status: 'aktif' });
+    expect(String(r.dokumen.skpdId)).toBe(String(subUnit.skpdId));
+    // ganda pada sub unit yang sama ditolak
+    await expect(svc.tambahSubkegiatan(admin, tid, masukan)).rejects.toMatchObject({ http: 400 });
+    expect((await svc.calonSubkegiatan(admin, tid, { kode })).sudahAda).toContain(String(subUnit._id));
+
+    // subkegiatan yang ditagging: info tagging ikut dikembalikan; sumber dana awal mengisi seluruh pagu
+    const sg = (await SumberDana.findOne({ namaTagging: 'DAU SG Pendidikan' }).lean())!;
+    const info = await svc.calonSubkegiatan(admin, tid, { kode: '1.01.02.2.02.0025' });
+    expect(info.tagging.map((x) => x.sumberDanaId)).toContain(String(sg._id));
+    const bebas = (await SubUnit.find().sort({ kode: 1 }).lean()).find((u) => !info.sudahAda.includes(String(u._id)))!;
+    const r2 = await svc.tambahSubkegiatan(admin, tid, { subUnitId: String(bebas._id), kodeNomenklatur: '1.01.02.2.02.0025', pagu: 7_000_000, sumberDanaId: String(sg._id) });
+    expect(r2.tagging.length).toBeGreaterThan(0);
+    expect(r2.dokumen).toMatchObject({ seimbang: true, alokasi: [{ nilai: 7_000_000, asal: 'admin' }] });
+    await SubkegiatanTahapan.deleteMany({ _id: { $in: [r.dokumen._id, r2.dokumen._id] } });
+  });
 });

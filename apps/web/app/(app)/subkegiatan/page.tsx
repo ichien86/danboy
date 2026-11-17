@@ -41,6 +41,7 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
         sub={`${tahapan.nama} · ${r.total} subkegiatan`}
         aksi={
           <>
+            {boleh(user, 'impor') && tahapan.status === 'terbuka' && <TautanTombol href="/subkegiatan/tambah">Tambah subkegiatan</TautanTombol>}
             {boleh(user, 'impor') && (
               <TombolImpor
                 jenis="apbd"

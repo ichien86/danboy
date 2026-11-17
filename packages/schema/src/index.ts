@@ -185,6 +185,20 @@ export const filterSubkegiatan = paginasi.extend({
   q: z.string().trim().max(100).optional(),
 });
 
+/** Tambah subkegiatan secara manual dari master nomenklatur (Admin). */
+export const subkegiatanBaru = z
+  .object({
+    subUnitId: objectId,
+    /** Kode subkegiatan di master nomenklatur, boleh berbentuk X.XX.… */
+    kodeNomenklatur: z.string().trim().min(5).max(40),
+    /** Bidang urusan pengganti X.XX (mis. 1.01); wajib bila kode master berbentuk X.XX. */
+    kodeBidang: z.string().trim().max(10).optional().nullable(),
+    pagu: uang,
+    /** Sumber dana awal untuk seluruh pagu; boleh kosong dan diisi belakangan. */
+    sumberDanaId: objectId.optional().nullable(),
+  })
+  .strict();
+
 /** Baris rincian APBD ekspor SIPD setelah header dicocokkan. */
 export const barisApbd = z.object({
   TAHUN: z.coerce.number().int(),
@@ -204,4 +218,5 @@ export type AlokasiInput = z.infer<typeof alokasiInput>;
 export type TahapanInput = z.infer<typeof tahapanInput>;
 export type PenggunaInput = z.infer<typeof penggunaInput>;
 export type FilterSubkegiatan = z.infer<typeof filterSubkegiatan>;
+export type SubkegiatanBaru = z.infer<typeof subkegiatanBaru>;
 export { z };

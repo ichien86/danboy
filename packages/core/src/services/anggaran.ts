@@ -16,12 +16,12 @@ import {
   type SubkegiatanTahapanDoc,
   type SumberDanaDoc,
 } from '@danboy/db';
-import type { AlokasiInput, FilterSubkegiatan } from '@danboy/schema';
+import type { AlokasiInput, FilterSubkegiatan, SubkegiatanBaru } from '@danboy/schema';
 import { dalamCakupan, pastikanBoleh, type SessionUser } from '../akses';
 import { Galat, tidakDitemukan } from '../galat';
 import { hashKomposisi, ikutSipd as hitungIkutSipd, terapkanEditAdmin, urutkan } from '../pembanding';
 import { statusSumberDana, type StatusSumberDana } from '../rekap';
-import { kandidatKodeNomenklatur } from '../kode';
+import { adalahKodeSubkegiatan, kandidatKodeNomenklatur, normalisasiKode } from '../kode';
 import { segarkanNotifikasi } from './notifikasi';
 import { ambangMendekati, cakupanDb, escapeRegex, muatTahapan, pastikanId, pastikanTahapanTerbuka } from './umum';
 
@@ -277,6 +277,106 @@ export async function detailSubkegiatan(user: SessionUser, id: string) {
     riwayat,
     riwayatImpor: riwayatImpor.filter((r) => r.batchId),
   });
+}
+
+/* ---------- Tambah subkegiatan manual (Admin) ---------- */
+
+const kodeX = (kode: string) => kode.toUpperCase().startsWith('X.');
+
+/** Daftar tagging (semua sumber dana) untuk sebuah kode subkegiatan, termasuk yang ditulis dengan pola X.XX. */
+async function taggingKode(tahun: number, kode: string) {
+  const rows = await Tagging.find({ tahun, kodeSubkegiatan: { $in: kandidatKodeNomenklatur(kode) } }).populate('sumberDanaId', 'kode nama').lean();
+  return rows.map((x) => {
+    const sd = x.sumberDanaId as unknown as { _id: unknown; kode: string; nama: string } | null;
+    return { sumberDanaId: String(sd?._id ?? x.sumberDanaId), sumberDana: sd?.nama ?? '?', kategori: x.kategori, rincian: x.rincian };
+  });
+}
+
+/** Bidang urusan di master nomenklatur (tanpa X.XX): pilihan pengganti X.XX saat menambah subkegiatan penunjang. */
+export async function daftarBidangUrusan(user: SessionUser) {
+  pastikanBoleh(user, 'lihat');
+  await sambung();
+  const data = await Nomenklatur.find({ jenis: 'bidang', aktif: true }).select('kode nama').lean();
+  return data
+    .filter((d) => !kodeX(d.kode))
+    .sort((a, b) => a.kode.localeCompare(b.kode, 'id', { numeric: true }))
+    .map((d) => ({ kode: d.kode, nama: d.nama }));
+}
+
+/**
+ * Bahan formulir tambah subkegiatan: tanpa `kode` = pencarian subkegiatan di master nomenklatur;
+ * dengan `kode` (kode akhir) = info tagging dan sub unit yang sudah memilikinya pada tahapan ini.
+ */
+export async function calonSubkegiatan(user: SessionUser, tahapanId: string, opsi: { q?: string; kode?: string }) {
+  pastikanBoleh(user, 'impor');
+  const t = await muatTahapan(tahapanId);
+  if (opsi.kode) {
+    const kode = normalisasiKode(opsi.kode);
+    const [tagging, ada] = await Promise.all([
+      taggingKode(t.tahun, kode),
+      SubkegiatanTahapan.find({ tahapanId: t._id, kodeSubkegiatan: kode }).select('subUnitId').lean(),
+    ]);
+    return ser({ kode, tagging, sudahAda: ada.map((a) => String(a.subUnitId)) });
+  }
+  const q = (opsi.q ?? '').trim();
+  if (q.length < 2) return { data: [] };
+  const data = await Nomenklatur.find({
+    aktif: true,
+    jenis: 'subkegiatan',
+    $or: [{ kode: { $regex: `^${escapeRegex(normalisasiKode(q))}`, $options: 'i' } }, { nama: { $regex: escapeRegex(q), $options: 'i' } }],
+  })
+    .select('kode nama')
+    .sort({ kode: 1 })
+    .limit(30)
+    .lean();
+  return ser({ data: data.map((d) => ({ kode: d.kode, nama: d.nama, templat: kodeX(d.kode) })) });
+}
+
+/**
+ * POST /api/tahapan/{id}/subkegiatan. Kode dan nama diambil dari master nomenklatur; untuk subkegiatan penunjang
+ * (X.XX.…) dua segmen pertama diganti bidang urusan yang dipilih. Tidak ditolak karena tagging; respons membawa
+ * daftar tagging agar pengguna tahu subkegiatan itu ditandai untuk sumber dana tertentu.
+ */
+export async function tambahSubkegiatan(user: SessionUser, tahapanId: string, input: SubkegiatanBaru) {
+  pastikanBoleh(user, 'impor');
+  const t = await pastikanTahapanTerbuka(tahapanId);
+  const subUnit = await SubUnit.findById(pastikanId(input.subUnitId, 'Sub unit')).lean();
+  if (!subUnit) throw tidakDitemukan('Sub unit');
+  const kodeMaster = normalisasiKode(input.kodeNomenklatur).toUpperCase();
+  const master = await Nomenklatur.findOne({ kode: kodeMaster, jenis: 'subkegiatan', aktif: true }).lean();
+  if (!master) throw new Galat('VALIDASI', `Subkegiatan ${kodeMaster} tidak ada di master nomenklatur`);
+  let kode = master.kode;
+  if (kodeX(master.kode)) {
+    const bidang = normalisasiKode(input.kodeBidang ?? '');
+    if (!bidang) throw new Galat('VALIDASI', 'Pilih bidang urusan untuk subkegiatan penunjang (X.XX)', { kodeBidang: 'Wajib dipilih' });
+    if (kodeX(bidang) || !(await Nomenklatur.exists({ kode: bidang, jenis: 'bidang', aktif: true })))
+      throw new Galat('VALIDASI', `Bidang urusan ${bidang} tidak ada di master nomenklatur`, { kodeBidang: 'Tidak dikenal' });
+    kode = [bidang, ...master.kode.split('.').slice(2)].join('.');
+  }
+  if (!adalahKodeSubkegiatan(kode)) throw new Galat('VALIDASI', `Kode subkegiatan ${kode} tidak valid`);
+  if (input.sumberDanaId && !(await SumberDana.exists({ _id: oid(input.sumberDanaId) }))) throw new Galat('VALIDASI', 'Sumber dana tidak dikenal');
+  const sudahAda = () => new Galat('VALIDASI', `Subkegiatan ${kode} sudah ada di ${subUnit.nama}`);
+  if (await SubkegiatanTahapan.exists({ tahapanId: t._id, subUnitId: subUnit._id, kodeSubkegiatan: kode })) throw sudahAda();
+  const alokasi = input.sumberDanaId && input.pagu > 0 ? [{ sumberDanaId: oid(input.sumberDanaId), nilai: input.pagu, nilaiSipd: 0, asal: 'admin' as const }] : [];
+  const baru = await SubkegiatanTahapan.create({
+    tahapanId: t._id,
+    skpdId: subUnit.skpdId,
+    subUnitId: subUnit._id,
+    kodeSubkegiatan: kode,
+    namaSubkegiatan: master.nama,
+    pagu: input.pagu,
+    status: 'aktif',
+    alokasi,
+    alokasiSipd: [],
+    beda: { ada: false },
+    seimbang: alokasi.reduce((s, a) => s + a.nilai, 0) === input.pagu,
+    rincian: [],
+  }).catch((e) => {
+    if ((e as { code?: number }).code === 11000) throw sudahAda();
+    throw e;
+  });
+  await segarkanNotifikasi(t._id);
+  return ser({ dokumen: baru.toObject(), tagging: await taggingKode(t.tahun, kode) });
 }
 
 /** Sisa pagu sumber dana yang tersentuh, agar tampilan langsung memperbarui angka. */
