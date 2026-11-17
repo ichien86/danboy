@@ -138,11 +138,36 @@ function filterDaftar(user: SessionUser, tahapanId: ReturnType<typeof oid>, f: P
   if (f.status === 'tidak_seimbang') Object.assign(filter, { seimbang: false, status: 'aktif' });
   else if (f.status === 'beda') filter['beda.ada'] = true;
   else if (f.status === 'tidak_ada_di_impor') filter.status = 'tidak_ada_di_impor';
+  const syaratJumlahSd = { satu: ['$eq', 1], dua_lebih: ['$gte', 2], lebih_dua: ['$gte', 3] } as const;
+  if (f.jumlahSd && f.jumlahSd in syaratJumlahSd) {
+    // banyaknya sumber dana = alokasi bernilai > 0
+    const [op, n] = syaratJumlahSd[f.jumlahSd];
+    filter.$expr = { [op]: [{ $size: { $filter: { input: '$alokasi', cond: { $gt: ['$$this.nilai', 0] } } } }, n] };
+  }
   if (f.q) {
     const q = escapeRegex(f.q);
     filter.$or = [{ kodeSubkegiatan: { $regex: `^${q}` } }, { namaSubkegiatan: { $regex: q, $options: 'i' } }];
   }
   return filter;
+}
+
+/**
+ * Jumlah pagu dan alokasi (per sumber dana) atas seluruh hasil saringan, bukan hanya halaman tampil.
+ * Subkegiatan yang tidak ada di impor terakhir tidak ikut dijumlah, kecuali saringan memilih status itu.
+ */
+async function jumlahDaftar(filter: Record<string, unknown>) {
+  const match = filter.status === 'tidak_ada_di_impor' ? filter : { ...filter, status: 'aktif' };
+  const [r] = await SubkegiatanTahapan.aggregate<{ pagu: { _id: null; nilai: number }[]; perSd: { _id: unknown; nilai: number }[] }>([
+    { $match: match },
+    {
+      $facet: {
+        pagu: [{ $group: { _id: null, nilai: { $sum: '$pagu' } } }],
+        perSd: [{ $unwind: '$alokasi' }, { $group: { _id: '$alokasi.sumberDanaId', nilai: { $sum: '$alokasi.nilai' } } }],
+      },
+    },
+  ]);
+  const perSd = Object.fromEntries((r?.perSd ?? []).map((k) => [String(k._id), k.nilai]));
+  return { pagu: r?.pagu[0]?.nilai ?? 0, alokasi: Object.values(perSd).reduce((a, b) => a + b, 0), perSd };
 }
 
 export async function daftarSubkegiatan(user: SessionUser, tahapanId: string, f: Partial<FilterSubkegiatan>) {
@@ -151,7 +176,7 @@ export async function daftarSubkegiatan(user: SessionUser, tahapanId: string, f:
   const filter = filterDaftar(user, t._id, f);
   const page = f.page ?? 1;
   const limit = Math.min(f.limit ?? 50, 200);
-  const [data, total] = await Promise.all([
+  const [data, total, jumlah] = await Promise.all([
     SubkegiatanTahapan.find(filter)
       .select('-rincian')
       .sort({ kodeSubkegiatan: 1 })
@@ -162,8 +187,9 @@ export async function daftarSubkegiatan(user: SessionUser, tahapanId: string, f:
       .populate('alokasi.sumberDanaId', 'kode nama khusus')
       .lean(),
     SubkegiatanTahapan.countDocuments(filter),
+    jumlahDaftar(filter),
   ]);
-  return ser({ data, total, page, limit });
+  return ser({ data, total, page, limit, jumlah: { pagu: jumlah.pagu, alokasi: jumlah.alokasi } });
 }
 
 async function muatSubkegiatan(user: SessionUser, id: string, session?: ClientSession) {
@@ -360,7 +386,7 @@ export async function matriks(user: SessionUser, tahapanId: string, f: Partial<F
   const kolom = await SumberDana.find({ _id: { $in: kolomIds } }).select('kode nama khusus').sort({ kode: 1 }).lean();
   const page = f.page ?? 1;
   const limit = Math.min(f.limit ?? 100, 200);
-  const [data, total, totalKolom] = await Promise.all([
+  const [data, total, jumlah] = await Promise.all([
     SubkegiatanTahapan.find(filter)
       .select('kodeSubkegiatan namaSubkegiatan pagu alokasi seimbang skpdId subUnitId beda status')
       .sort({ kodeSubkegiatan: 1 })
@@ -370,13 +396,9 @@ export async function matriks(user: SessionUser, tahapanId: string, f: Partial<F
       .populate('subUnitId', 'kode nama')
       .lean(),
     SubkegiatanTahapan.countDocuments(filter),
-    SubkegiatanTahapan.aggregate<{ _id: unknown; nilai: number }>([
-      { $match: { ...filter, status: 'aktif' } },
-      { $unwind: '$alokasi' },
-      { $group: { _id: '$alokasi.sumberDanaId', nilai: { $sum: '$alokasi.nilai' } } },
-    ]),
+    jumlahDaftar(filter),
   ]);
-  return ser({ kolom, data, total, page, limit, totalKolom: Object.fromEntries(totalKolom.map((k) => [String(k._id), k.nilai])) });
+  return ser({ kolom, data, total, page, limit, totalKolom: jumlah.perSd, totalPagu: jumlah.pagu, totalAlokasi: jumlah.alokasi });
 }
 
 /* ---------- Pagu sumber dana ---------- */

@@ -8,11 +8,14 @@ export async function FilterSubkegiatan({
   sp,
   dasar,
   status = true,
+  jumlahSd = false,
 }: {
   user: SessionUser;
   sp: Record<string, string | undefined>;
   dasar: string;
   status?: boolean;
+  /** Tampilkan saringan banyaknya sumber dana per subkegiatan. */
+  jumlahSd?: boolean;
 }) {
   const [skpd, sd] = await Promise.all([user.peran === 'skpd' ? [] : daftarSkpd(user), daftarSumberDana(user)]);
   return (
@@ -42,6 +45,14 @@ export async function FilterSubkegiatan({
           <option value="tidak_seimbang">Belum seimbang (R4)</option>
           <option value="beda">Beda dengan SIPD (R2)</option>
           <option value="tidak_ada_di_impor">Tidak ada di impor (R8)</option>
+        </Pilihan>
+      )}
+      {jumlahSd && (
+        <Pilihan name="jumlahSd" defaultValue={sp.jumlahSd ?? ''} aria-label="Jumlah sumber dana" className="lg:w-52">
+          <option value="">Semua jumlah sumber dana</option>
+          <option value="satu">1 sumber dana</option>
+          <option value="dua_lebih">2 sumber dana atau lebih</option>
+          <option value="lebih_dua">Lebih dari 2 sumber dana</option>
         </Pilihan>
       )}
       <div className="flex gap-2">

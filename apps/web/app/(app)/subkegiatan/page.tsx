@@ -29,7 +29,7 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
   const { user, tahapan, sp } = await konteksHalaman(searchParams);
   if (!tahapan) return <TanpaTahapan superAdmin={user.peran === 'super_admin'} />;
   const page = num(sp.page, 1);
-  const filter = { q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status as 'beda' | undefined };
+  const filter = { q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status as 'beda' | undefined, jumlahSd: sp.jumlahSd as 'satu' | undefined };
   const r = await daftarSubkegiatan(user, String(tahapan._id), { ...filter, page, limit: 50 });
   const { id: _id, page: _p, ...param } = sp;
   void _id, _p;
@@ -50,11 +50,11 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
                 nonaktif={tahapan.status === 'terbuka' ? undefined : `Tahapan ${tahapan.nama} tidak terbuka; impor ditolak (R10)`}
               />
             )}
-            <TautanTombol href={`/api/ekspor/subkegiatan?tahapanId=${tahapan._id}`}>Unduh Excel</TautanTombol>
+            <TautanTombol href={`/api/ekspor/subkegiatan?${new URLSearchParams(Object.entries({ q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status, jumlahSd: sp.jumlahSd, tahapanId: String(tahapan._id) }).filter(([, v]) => v) as [string, string][])}`}>Unduh Excel</TautanTombol>
           </>
         }
       />
-      <FilterSubkegiatan user={user} sp={sp} dasar="/subkegiatan" />
+      <FilterSubkegiatan user={user} sp={sp} dasar="/subkegiatan" jumlahSd />
       <Kartu padat>
         {r.data.length ? (
           <>
@@ -108,6 +108,22 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-garis bg-latar font-semibold">
+                  <TD>Jumlah ({r.total} subkegiatan{Object.values(filter).some(Boolean) ? ', sesuai saringan' : ''})</TD>
+                  <TD />
+                  <TD>
+                    <span className="flex justify-between gap-3 text-xs">
+                      <span>Alokasi</span>
+                      <Rupiah nilai={r.jumlah.alokasi} juta />
+                    </span>
+                  </TD>
+                  <TD kanan>
+                    <Rupiah nilai={r.jumlah.pagu} />
+                  </TD>
+                  <TD />
+                </tr>
+              </tfoot>
             </Tabel>
             <Paginasi total={r.total} page={page} limit={50} dasar="/subkegiatan" param={param} />
           </>

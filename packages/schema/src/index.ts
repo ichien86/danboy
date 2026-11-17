@@ -178,6 +178,8 @@ export const filterSubkegiatan = paginasi.extend({
   subUnit: objectId.optional(),
   sumberDana: objectId.optional(),
   status: z.enum(['semua', 'tidak_seimbang', 'beda', 'tidak_ada_di_impor']).optional(),
+  /** Banyaknya sumber dana (alokasi bernilai > 0): satu, dua atau lebih, lebih dari dua. */
+  jumlahSd: z.enum(['satu', 'dua_lebih', 'lebih_dua']).optional(),
   q: z.string().trim().max(100).optional(),
 });
 

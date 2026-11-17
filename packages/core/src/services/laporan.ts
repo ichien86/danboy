@@ -1,3 +1,4 @@
+import type { FilterSubkegiatan } from '@danboy/schema';
 import { LogAudit, Notifikasi, SubkegiatanTahapan, oid, sambung } from '@danboy/db';
 import { buatXlsx, type SheetEkspor } from '@danboy/excel';
 import { pastikanBoleh, type SessionUser } from '../akses';
@@ -38,8 +39,16 @@ const LABEL_STATUS: Record<string, string> = {
 
 export type JenisEkspor = 'rekap' | 'matriks' | 'notifikasi' | 'subkegiatan';
 
-/** GET /api/ekspor/{jenis}: unduh Excel; akun SKPD hanya data sendiri. */
-export async function ekspor(user: SessionUser, jenis: JenisEkspor, tahapanId: string): Promise<{ namaFile: string; isi: Buffer }> {
+/**
+ * GET /api/ekspor/{jenis}: unduh Excel; akun SKPD hanya data sendiri.
+ * Matriks dan subkegiatan mengikuti saringan halaman (q, skpd, sumberDana, status, jumlahSd).
+ */
+export async function ekspor(
+  user: SessionUser,
+  jenis: JenisEkspor,
+  tahapanId: string,
+  saringan: Partial<Omit<FilterSubkegiatan, 'page' | 'limit'>> = {},
+): Promise<{ namaFile: string; isi: Buffer }> {
   pastikanBoleh(user, 'ekspor');
   const t = await muatTahapan(tahapanId);
   const judul = `${t.nama} — diunduh ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`;
@@ -65,22 +74,26 @@ export async function ekspor(user: SessionUser, jenis: JenisEkspor, tahapanId: s
       },
     ];
   } else if (jenis === 'matriks' || jenis === 'subkegiatan') {
-    const pertama = await matriks(user, tahapanId, { page: 1, limit: 200 });
+    const { page: _p, limit: _l, ...f } = saringan as Partial<FilterSubkegiatan>;
+    void _p, _l;
+    const disaring = Object.values(f).some(Boolean);
+    const pertama = await matriks(user, tahapanId, { ...f, page: 1, limit: 200 });
     type BarisM = Record<string, unknown> & { alokasi: { sumberDanaId: string; nilai: number }[] };
     const semua = [...pertama.data] as unknown as BarisM[];
-    for (let p = 2; (p - 1) * 200 < pertama.total; p++) semua.push(...((await matriks(user, tahapanId, { page: p, limit: 200 })).data as unknown as BarisM[]));
+    for (let p = 2; (p - 1) * 200 < pertama.total; p++) semua.push(...((await matriks(user, tahapanId, { ...f, page: p, limit: 200 })).data as unknown as BarisM[]));
     const kolomSd = (pertama.kolom as unknown as { _id: string; kode: string; nama: string }[]).map((k) => ({ header: `${k.nama} (${k.kode})`, key: `sd_${k._id}`, rupiah: true, width: 18 }));
     sheets = [
       {
         nama: jenis === 'matriks' ? 'Matriks' : 'Subkegiatan',
-        judul: `${jenis === 'matriks' ? 'Matriks Subkegiatan × Sumber Dana' : 'Daftar Subkegiatan'} ${judul}`,
+        judul: `${jenis === 'matriks' ? 'Matriks Subkegiatan × Sumber Dana' : 'Daftar Subkegiatan'} ${judul}${disaring ? ' (sesuai saringan)' : ''}`,
         kolom: [
           { header: 'SKPD', key: 'skpd', width: 36 },
           { header: 'Sub Unit', key: 'subUnit', width: 36 },
           { header: 'Kode Subkegiatan', key: 'kodeSubkegiatan', width: 20 },
           { header: 'Nama Subkegiatan', key: 'namaSubkegiatan', width: 48 },
           { header: 'Pagu', key: 'pagu', rupiah: true, width: 18 },
-          ...(jenis === 'matriks' ? kolomSd : [{ header: 'Jumlah Alokasi', key: 'jumlahAlokasi', rupiah: true, width: 18 }]),
+          ...(jenis === 'matriks' ? kolomSd : []),
+          { header: 'Jumlah Alokasi', key: 'jumlahAlokasi', rupiah: true, width: 18 },
           { header: 'Seimbang', key: 'seimbangLabel', width: 10 },
           { header: 'Status', key: 'status', width: 16 },
         ],
