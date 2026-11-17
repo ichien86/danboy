@@ -93,6 +93,7 @@ export const PENJELASAN_ATURAN: Record<string, string> = {
   R3: 'Jumlah alokasi suatu sumber dana melebihi pagu sumber dana yang diisi Admin Keuangan.',
   R4: 'Jumlah alokasi sumber dana suatu subkegiatan belum sama dengan pagunya.',
   R5: 'Subkegiatan didanai sumber dana khusus tetapi tidak ada di daftar tagging tahun ini.',
+  R6: 'Subkegiatan ada di daftar tagging sumber dana khusus, tetapi alokasinya tidak memakai sumber dana tersebut.',
   R8: 'Subkegiatan ada di aplikasi tetapi tidak ada lagi di impor SIPD terakhir.',
   R9: 'Impor SIPD merujuk subkegiatan, sumber dana, SKPD, atau sub unit yang belum ada di master; barisnya ditahan.',
   VS: 'Hasil Verifikasi SIPD: sumber dana yang diinput SKPD di SIPD belum sama dengan alokasi di aplikasi.',

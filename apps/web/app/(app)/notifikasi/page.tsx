@@ -32,7 +32,7 @@ export default async function Notifikasi({ searchParams }: { searchParams: SP })
           </Link>
         ))}
         <span className="mx-1 text-garis">|</span>
-        {['', 'VS', 'R2', 'R3', 'R4', 'R5', 'R8', 'R9', 'PD'].map((a) => (
+        {['', 'VS', 'R2', 'R3', 'R4', 'R5', 'R6', 'R8', 'R9', 'PD'].map((a) => (
           <Link key={a} href={tautan({ aturan: a || undefined })} className={`rounded-full border px-2.5 py-1 text-xs ${(sp.aturan ?? '') === a ? 'border-utama bg-utama-lembut font-medium text-utama' : 'border-garis bg-permukaan text-redup hover:text-teks'}`} title={a ? PENJELASAN_ATURAN[a] : undefined}>
             {a ? LABEL_ATURAN[a] : 'Semua jenis'}
           </Link>

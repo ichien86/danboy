@@ -163,6 +163,7 @@ di `TUJUAN_CADANGAN`. **Pemantauan:** `GET /api/kesehatan` (MongoDB, Redis, antr
 | Pagu sumber dana terlampaui | R3 | Jumlah alokasi suatu sumber dana melebihi pagu sumber dana |
 | Alokasi belum seimbang | R4 | Jumlah alokasi sumber dana suatu subkegiatan belum sama dengan pagunya |
 | Di luar daftar tagging | R5 | Subkegiatan didanai sumber dana khusus tetapi tidak ada di daftar tagging |
+| Tertagging, didanai sumber lain | R6 | Subkegiatan ada di daftar tagging sumber dana khusus, tetapi alokasinya tidak memakai sumber dana tersebut |
 | Hilang dari SIPD | R8 | Subkegiatan ada di aplikasi tetapi tidak ada lagi di impor SIPD terakhir |
 | Belum ada di master | R9 | Impor merujuk subkegiatan/sumber dana/SKPD/sub unit yang belum ada di master |
 | Nama perangkat daerah berbeda | PD | Nama SKPD/sub unit di SIPD berbeda dengan master |
