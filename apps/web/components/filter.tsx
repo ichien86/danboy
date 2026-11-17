@@ -54,7 +54,7 @@ export async function FilterSubkegiatan({
         </label>
       )}
       {jumlahSd && (
-        <label className="flex cursor-pointer items-center gap-2 py-2 text-sm" title="Subkegiatan ada di daftar tagging, tetapi tidak memakai sumber dana tagging-nya">
+        <label className="flex cursor-pointer items-center gap-2 py-2 text-sm" title="Tertagging tetapi tidak memakai sumber dana tagging-nya, atau memakai sumber dana khusus tanpa ada di daftar tagging">
           <input type="checkbox" name="bedaTagging" value="1" defaultChecked={!!sp.bedaTagging} className="h-4 w-4" />
           Beda dengan tagging
         </label>

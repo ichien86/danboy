@@ -131,13 +131,16 @@ export async function subkegiatanPerSumberDana(user: SessionUser, tahapanId: str
 }
 
 /**
- * Id subkegiatan yang "beda dengan tagging" (R6): ada di daftar tagging tahun itu, tetapi ada sumber dana
- * tagging-nya yang tidak dipakai (alokasi 0 atau tidak ada). Dihitung saat diminta, tidak disimpan.
+ * Id subkegiatan yang "beda dengan tagging", dua arah:
+ *  - R6: ada di daftar tagging tahun itu, tetapi ada sumber dana tagging-nya yang tidak dipakai;
+ *  - R5: memakai sumber dana khusus, padahal tidak ditagging untuk sumber dana itu.
+ * "Dipakai" = alokasi bernilai > 0. Dihitung saat diminta, tidak disimpan.
  */
 async function idBedaTagging(user: SessionUser, t: { _id: ReturnType<typeof oid>; tahun: number }) {
-  const [tagging, docs] = await Promise.all([
+  const [tagging, docs, khusus] = await Promise.all([
     Tagging.find({ tahun: t.tahun }).select('sumberDanaId kodeSubkegiatan').lean(),
     SubkegiatanTahapan.find({ tahapanId: t._id, ...cakupanDb(user) }).select('kodeSubkegiatan alokasi').lean<SubkegiatanTahapanDoc[]>(),
+    SumberDana.find({ khusus: true }).distinct('_id').then((ids) => new Set(ids.map(String))),
   ]);
   const sdPerKode = new Map<string, Set<string>>();
   for (const x of tagging) {
@@ -148,7 +151,8 @@ async function idBedaTagging(user: SessionUser, t: { _id: ReturnType<typeof oid>
   return docs
     .filter((d) => {
       const dipakai = new Set(d.alokasi.filter((a) => a.nilai > 0).map((a) => String(a.sumberDanaId)));
-      return kandidatKodeNomenklatur(d.kodeSubkegiatan).some((k) => [...(sdPerKode.get(k) ?? [])].some((sid) => !dipakai.has(sid)));
+      const tagging = new Set(kandidatKodeNomenklatur(d.kodeSubkegiatan).flatMap((k) => [...(sdPerKode.get(k) ?? [])]));
+      return [...tagging].some((sid) => !dipakai.has(sid)) || [...dipakai].some((sid) => khusus.has(sid) && !tagging.has(sid));
     })
     .map((d) => d._id);
 }
