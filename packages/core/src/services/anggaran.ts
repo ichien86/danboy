@@ -132,7 +132,8 @@ export async function subkegiatanPerSumberDana(user: SessionUser, tahapanId: str
 
 /**
  * Id subkegiatan yang "beda dengan tagging", dua arah:
- *  - R6: ada di daftar tagging tahun itu, tetapi ada sumber dana tagging-nya yang tidak dipakai;
+ *  - R6: ada di daftar tagging tahun itu, tetapi tidak satu pun sumber dana tagging-nya dipakai
+ *    (tertagging untuk beberapa sumber dana dan sudah didanai salah satunya = sesuai);
  *  - R5: memakai sumber dana khusus, padahal tidak ditagging untuk sumber dana itu.
  * "Dipakai" = alokasi bernilai > 0. Dihitung saat diminta, tidak disimpan.
  */
@@ -152,7 +153,7 @@ async function idBedaTagging(user: SessionUser, t: { _id: ReturnType<typeof oid>
     .filter((d) => {
       const dipakai = new Set(d.alokasi.filter((a) => a.nilai > 0).map((a) => String(a.sumberDanaId)));
       const tagging = new Set(kandidatKodeNomenklatur(d.kodeSubkegiatan).flatMap((k) => [...(sdPerKode.get(k) ?? [])]));
-      return [...tagging].some((sid) => !dipakai.has(sid)) || [...dipakai].some((sid) => khusus.has(sid) && !tagging.has(sid));
+      return (tagging.size > 0 && ![...tagging].some((sid) => dipakai.has(sid))) || [...dipakai].some((sid) => khusus.has(sid) && !tagging.has(sid));
     })
     .map((d) => d._id);
 }
@@ -257,8 +258,10 @@ export async function detailSubkegiatan(user: SessionUser, id: string) {
   ]);
   const sdPer = Object.fromEntries(sdList.map((s) => [String(s._id), s]));
   const taggingSd = new Set(tagging.map((x) => String((x.sumberDanaId as unknown as { _id: unknown })?._id ?? x.sumberDanaId)));
-  // R6: tertagging untuk sumber dana khusus tertentu, tetapi didanai sumber lain (dihitung saat tampil)
-  const r6 = tagging
+  // R6: tertagging untuk sumber dana khusus tertentu, tetapi didanai sumber lain (dihitung saat tampil).
+  // Tertagging untuk beberapa sumber dana dan sudah didanai salah satunya = sesuai, tidak ada R6.
+  const pakaiTagging = d.alokasi.some((a) => a.nilai > 0 && taggingSd.has(String(a.sumberDanaId)));
+  const r6 = (pakaiTagging ? [] : tagging)
     .filter((x) => {
       const sid = String((x.sumberDanaId as unknown as { _id: unknown })?._id ?? x.sumberDanaId);
       return !d.alokasi.some((a) => String(a.sumberDanaId) === sid && a.nilai > 0);
