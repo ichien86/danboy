@@ -271,24 +271,50 @@ export async function detailSubkegiatan(user: SessionUser, id: string) {
   pastikanBoleh(user, 'lihat');
   await sambung();
   const d = await muatSubkegiatan(user, id);
-  const t = await muatTahapan(d.tahapanId);
-  const sdIds = [...new Set([...d.alokasi.map((a) => String(a.sumberDanaId)), ...(d.alokasiSipd ?? []).map((a) => String(a.sumberDanaId))])];
-  const [skpd, subUnit, sdList, tagging, nomenklatur, riwayat, riwayatImpor] = await Promise.all([
+  const sdIds = new Set([...d.alokasi.map((a) => String(a.sumberDanaId)), ...(d.alokasiSipd ?? []).map((a) => String(a.sumberDanaId))]);
+  // semua dibaca bersamaan; data rujukan (sumber dana, nama pengguna) digabung di sini, bukan lewat populate
+  const [t, skpd, subUnit, semuaSd, taggingSemuaTahun, nomenklatur, riwayatMentah, riwayatImpor] = await Promise.all([
+    muatTahapan(d.tahapanId),
     Skpd.findById(d.skpdId).lean(),
     SubUnit.findById(d.subUnitId).lean(),
-    SumberDana.find({ _id: { $in: sdIds.map(oid) } }).lean(),
-    Tagging.find({ tahun: t.tahun, kodeSubkegiatan: { $in: kandidatKodeNomenklatur(d.kodeSubkegiatan) } }).populate('sumberDanaId', 'kode nama').lean(),
+    SumberDana.find().lean<SumberDanaDoc[]>(),
+    // tagging kode ini untuk semua tahun (sedikit), disaring per tahun tahapan di bawah agar tidak menunggu tahapan
+    Tagging.find({ kodeSubkegiatan: { $in: kandidatKodeNomenklatur(d.kodeSubkegiatan) } }).lean(),
     Nomenklatur.find({ kode: { $in: kandidatKodeNomenklatur(d.kodeSubkegiatan) }, aktif: true })
       .lean()
       .then((xs) => xs.sort((a, b) => (a.kode === d.kodeSubkegiatan ? -1 : b.kode === d.kodeSubkegiatan ? 1 : 0))[0] ?? null),
-    LogAudit.find({ koleksi: 'subkegiatanTahapan', dokumenId: d._id }).sort({ waktu: -1 }).limit(30).populate('userId', 'nama username').lean(),
-    HasilBanding.find({ kunci: `${d.subUnitId}|${d.kodeSubkegiatan}` })
-      .select('batchId aturan sebelum sesudah')
-      .sort({ _id: -1 })
-      .limit(10)
-      .populate({ path: 'batchId', select: 'namaFile status diterapkanPada tahapanId', match: { tahapanId: d.tahapanId, status: 'diterapkan' } })
-      .lean(),
+    LogAudit.aggregate([
+      { $match: { koleksi: 'subkegiatanTahapan', dokumenId: d._id } },
+      { $sort: { waktu: -1 } },
+      { $limit: 30 },
+      { $lookup: { from: 'user', localField: 'userId', foreignField: '_id', as: 'userId', pipeline: [{ $project: { nama: 1, username: 1 } }] } },
+      { $set: { userId: { $ifNull: [{ $first: '$userId' }, null] } } },
+    ]),
+    HasilBanding.aggregate([
+      { $match: { kunci: `${d.subUnitId}|${d.kodeSubkegiatan}` } },
+      { $sort: { _id: -1 } },
+      { $limit: 10 },
+      { $project: { batchId: 1, aturan: 1, sebelum: 1, sesudah: 1 } },
+      {
+        $lookup: {
+          from: 'imporBatch',
+          localField: 'batchId',
+          foreignField: '_id',
+          as: 'batchId',
+          pipeline: [{ $match: { tahapanId: d.tahapanId, status: 'diterapkan' } }, { $project: { namaFile: 1, status: 1, diterapkanPada: 1, tahapanId: 1 } }],
+        },
+      },
+      { $set: { batchId: { $ifNull: [{ $first: '$batchId' }, null] } } },
+    ]),
   ]);
+  const riwayat = riwayatMentah;
+  const taggingMentah = taggingSemuaTahun.filter((x) => x.tahun === t.tahun);
+  const sdSemuaPer = new Map(semuaSd.map((s) => [String(s._id), s]));
+  const sdList = semuaSd.filter((s) => sdIds.has(String(s._id)));
+  const tagging = taggingMentah.map((x) => {
+    const sd = sdSemuaPer.get(String(x.sumberDanaId));
+    return { ...x, sumberDanaId: sd ? { _id: sd._id, kode: sd.kode, nama: sd.nama } : null };
+  });
   const sdPer = Object.fromEntries(sdList.map((s) => [String(s._id), s]));
   const taggingSd = new Set(tagging.map((x) => String((x.sumberDanaId as unknown as { _id: unknown })?._id ?? x.sumberDanaId)));
   // R6: tertagging untuk sumber dana khusus tertentu, tetapi didanai sumber lain (dihitung saat tampil).

@@ -1,6 +1,7 @@
 import {
   HasilBanding,
   ImporBatch,
+  User,
   ImporBaris,
   Notifikasi,
   catatAudit,
@@ -218,12 +219,15 @@ export async function prosesVerifikasi(batchId: string) {
   }
 }
 
+/** Batch verifikasi beserta nama pengunggah dan tahapan, digabung di server dalam satu permintaan (bentuk sama dengan populate). */
 async function muatBatchVerifikasi(batchId: string) {
   await sambung();
-  const b = await ImporBatch.findOne({ _id: oid(pastikanId(batchId, 'Verifikasi')), jenis: 'verifikasi' })
-    .populate('olehId', 'nama')
-    .populate('tahapanId', 'nama status tahun')
-    .lean();
+  const [b] = await ImporBatch.aggregate<ImporBatchDoc>([
+    { $match: { _id: oid(pastikanId(batchId, 'Verifikasi')), jenis: 'verifikasi' } },
+    { $lookup: { from: 'user', localField: 'olehId', foreignField: '_id', as: 'olehId', pipeline: [{ $project: { nama: 1 } }] } },
+    { $lookup: { from: 'tahapan', localField: 'tahapanId', foreignField: '_id', as: 'tahapanId', pipeline: [{ $project: { nama: 1, status: 1, tahun: 1 } }] } },
+    { $set: { olehId: { $ifNull: [{ $first: '$olehId' }, null] }, tahapanId: { $ifNull: [{ $first: '$tahapanId' }, null] } } },
+  ]);
   if (!b) throw tidakDitemukan('Verifikasi');
   return b;
 }
@@ -276,21 +280,30 @@ function filterHasil(user: SessionUser, batchId: unknown, f: FilterHasilVerifika
 
 export async function hasilVerifikasi(user: SessionUser, batchId: string, f: FilterHasilVerifikasi = {}) {
   pastikanBoleh(user, 'lihat');
-  const b = await muatBatchVerifikasi(batchId);
-  if (user.peran === 'skpd' && b.status !== 'selesai') throw tidakDitemukan('Verifikasi');
+  const id = oid(pastikanId(batchId, 'Verifikasi'));
   const page = f.page ?? 1;
   const limit = Math.min(f.limit ?? 50, 200);
-  const filter = filterHasil(user, b._id, f);
-  const [data, total, tindakLanjut] = await Promise.all([
+  const filter = filterHasil(user, id, f);
+  // semua dibaca bersamaan (satu putaran ke basis data); hasil dibuang bila batch tidak boleh dilihat
+  const [b, data, total, tindakLanjut, pengguna] = await Promise.all([
+    muatBatchVerifikasi(batchId),
     HasilBanding.find(filter)
+      // baris rekening dari verifikasi lama tidak dipakai lagi; jangan ikut dikirim
+      .select('-verifikasi.rincianSalah -operasi')
       .sort({ 'tindakLanjut.selesai': 1, 'verifikasi.urut': 1, 'verifikasi.kodeSkpd': 1, kodeSubkegiatan: 1 })
       .skip((page - 1) * limit)
       .limit(limit)
-      .populate('tindakLanjut.oleh', 'nama')
       .lean(),
     HasilBanding.countDocuments(filter),
-    progresTindakLanjut(user, b._id),
+    progresTindakLanjut(user, id),
+    User.find().select('nama').lean(),
   ]);
+  if (user.peran === 'skpd' && b.status !== 'selesai') throw tidakDitemukan('Verifikasi');
+  // nama pencentang "sudah disesuaikan di SIPD" (pengganti populate)
+  const namaPer = new Map(pengguna.map((u) => [String(u._id), { _id: u._id, nama: u.nama }]));
+  for (const d of data as unknown as { tindakLanjut?: { oleh?: unknown } }[]) {
+    if (d.tindakLanjut?.oleh) d.tindakLanjut.oleh = namaPer.get(String(d.tindakLanjut.oleh)) ?? null;
+  }
   return ser({ batch: { ...b, ringkasan: batasiRingkasan(user, b.ringkasan as RingkasanBatch) }, data, total, page, limit, tindakLanjut });
 }
 

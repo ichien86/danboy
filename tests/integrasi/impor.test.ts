@@ -57,7 +57,8 @@ async function cekSamaDenganPenuh(tId: string) {
 }
 
 beforeAll(async () => {
-  rs = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } });
+  // batas waktu mulai diperlonggar: di Windows mongod kadang lambat menyala (antivirus, beban mesin)
+  rs = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' }, instanceOpts: [{ launchTimeout: 60_000 }] });
   process.env.MONGODB_URI = rs.getUri('danboy_uji');
   delete process.env.REDIS_URL;
   await sambung();
