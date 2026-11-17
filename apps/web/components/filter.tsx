@@ -48,12 +48,10 @@ export async function FilterSubkegiatan({
         </Pilihan>
       )}
       {jumlahSd && (
-        <Pilihan name="jumlahSd" defaultValue={sp.jumlahSd ?? ''} aria-label="Jumlah sumber dana" className="lg:w-52">
-          <option value="">Semua jumlah sumber dana</option>
-          <option value="satu">1 sumber dana</option>
-          <option value="dua_lebih">2 sumber dana atau lebih</option>
-          <option value="lebih_dua">Lebih dari 2 sumber dana</option>
-        </Pilihan>
+        <label className="flex cursor-pointer items-center gap-2 py-2 text-sm">
+          <input type="checkbox" name="jumlahSd" value="dua_lebih" defaultChecked={sp.jumlahSd === 'dua_lebih'} className="h-4 w-4" />
+          Lebih dari satu sumber dana
+        </label>
       )}
       <div className="flex gap-2">
         <Tombol type="submit" varian="utama">
