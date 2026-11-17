@@ -32,7 +32,6 @@ interface Detail {
   alokasi: Alokasi[];
   alokasiSipd: { sumberDanaId: string; nilai: number }[];
   beda: { ada: boolean; diputuskan?: string; pada?: string };
-  rincian: { kodeRekening: string; kodeSumberDana: string; paket?: string; namaPaket?: string; pagu: number }[];
   tahapan: { _id: string; nama: string; status: string; tahun: number };
   skpd?: { nama: string; kode: string };
   subUnit?: { nama: string; kode: string };
@@ -257,8 +256,8 @@ export function PanelAlokasi({ d, bolehUbah, onTersimpan }: { d: Detail; bolehUb
   );
 }
 
-const TAB = ['alokasi', 'sipd', 'rincian', 'tagging', 'riwayat'] as const;
-const LABEL_TAB = { alokasi: 'Alokasi', sipd: 'Banding SIPD', rincian: 'Rincian rekening', tagging: 'Tagging', riwayat: 'Riwayat' };
+const TAB = ['alokasi', 'sipd', 'tagging', 'riwayat'] as const;
+const LABEL_TAB = { alokasi: 'Alokasi', sipd: 'Banding SIPD', tagging: 'Tagging', riwayat: 'Riwayat' };
 
 /** Ubah pagu / hapus subkegiatan (Admin, tahapan terbuka). */
 function AksiSubkegiatan({ d, onBerubah, onDihapus }: { d: Detail; onBerubah: () => void; onDihapus: () => void }) {
@@ -435,35 +434,6 @@ export function DetailSubkegiatan({ id, bolehUbah, onBerubah, onDihapus }: { id:
 
       {tab === 'alokasi' && <PanelAlokasi d={d} bolehUbah={bolehUbah} onTersimpan={sesudahUbah} />}
       {tab === 'sipd' && <BandingSipd d={d} />}
-      {tab === 'rincian' && (
-        <Tabel>
-          <thead>
-            <tr>
-              <TH>Rekening</TH>
-              <TH>Sumber dana</TH>
-              <TH>Paket</TH>
-              <TH kanan>Pagu</TH>
-            </tr>
-          </thead>
-          <tbody>
-            {d.rincian.map((r, i) => (
-              <tr key={i}>
-                <TD className="font-mono text-xs">{r.kodeRekening}</TD>
-                <TD className="font-mono text-xs">{r.kodeSumberDana}</TD>
-                <TD>{r.namaPaket || r.paket || '–'}</TD>
-                <TD kanan>{rp(r.pagu)}</TD>
-              </tr>
-            ))}
-            {!d.rincian.length && (
-              <tr>
-                <TD colSpan={4} className="py-6 text-center text-redup">
-                  Belum ada rincian dari SIPD
-                </TD>
-              </tr>
-            )}
-          </tbody>
-        </Tabel>
-      )}
       {tab === 'tagging' &&
         (d.tagging.length ? (
           <ul className="space-y-2">

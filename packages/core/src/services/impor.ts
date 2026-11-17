@@ -434,6 +434,9 @@ export async function prosesApbd(batchId: string) {
 
     // rekap + banding
     const sipd = rekapSipd(terpetakan);
+    // rincian rekening tidak disimpan: cukup pagu (jumlah semua baris rekening) dan alokasi per sumber dana.
+    // Rincian lama yang masih tersimpan ikut dikosongkan saat impor diterapkan.
+    for (const e of sipd.values()) e.rincian = [];
     const tersimpanDocs = await SubkegiatanTahapan.find({ tahapanId: tahapan._id }).lean<SubkegiatanTahapanDoc[]>();
     const versi = new Map<string, string>();
     const tersimpan = new Map<string, Tersimpan>();
