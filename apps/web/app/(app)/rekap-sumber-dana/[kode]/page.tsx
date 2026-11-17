@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { boleh } from '@danboy/core';
 import { detailSumberDana, rekapSumberDana, subkegiatanPerSumberDana } from '@danboy/core/services';
 import { Rupiah, StatusSumberDana } from '@/components/domain';
@@ -13,6 +13,7 @@ export const metadata: Metadata = { title: 'Sumber Dana' };
 export default async function SubkegiatanSumberDana({ params, searchParams }: { params: Promise<{ kode: string }>; searchParams: SP }) {
   const { kode } = await params;
   const { user, tahapan, sp } = await konteksHalaman(searchParams);
+  if (user.peran === 'skpd') redirect('/dasbor'); // rekap sumber dana tidak ditampilkan untuk akun SKPD
   if (!tahapan) return <TanpaTahapan superAdmin={user.peran === 'super_admin'} />;
   const sd = await detailSumberDana(user, decodeURIComponent(kode)).catch(() => null);
   if (!sd) notFound();

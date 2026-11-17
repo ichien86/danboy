@@ -64,18 +64,18 @@ export default async function Matriks({ searchParams }: { searchParams: SP }) {
                           </Link>
                         </td>
                         <td className={cx('angka border-b border-r border-garis px-2 py-1.5 text-right group-hover:bg-latar', !d.seimbang && 'text-waspada')}>
-                          <Rupiah nilai={d.pagu} juta />
+                          <Rupiah nilai={d.pagu} />
                         </td>
                         {kolom.map((k) => (
                           <td key={k._id} className="angka border-b border-r border-garis px-2 py-1.5 text-right group-hover:bg-latar">
-                            {per.get(k._id) ? <Rupiah nilai={per.get(k._id)!} juta /> : <span className="text-garis">·</span>}
+                            {per.get(k._id) ? <Rupiah nilai={per.get(k._id)!} /> : <span className="text-garis">·</span>}
                           </td>
                         ))}
                         <td
                           className={cx('angka border-b border-r border-garis bg-latar/60 px-2 py-1.5 text-right font-semibold group-hover:bg-latar', !d.seimbang && 'text-waspada')}
                           title={d.seimbang ? undefined : 'Jumlah alokasi belum sama dengan pagu (R4)'}
                         >
-                          <Rupiah nilai={d.alokasi.reduce((x, a) => x + a.nilai, 0)} juta />
+                          <Rupiah nilai={d.alokasi.reduce((x, a) => x + a.nilai, 0)} />
                         </td>
                       </tr>
                     );
@@ -83,15 +83,15 @@ export default async function Matriks({ searchParams }: { searchParams: SP }) {
                   <tr className="sticky bottom-0 z-20 font-semibold">
                     <td className="sticky left-0 z-30 border-r border-t border-garis bg-latar px-2 py-2">Jumlah ({r.total} subkegiatan, semua halaman)</td>
                     <td className="angka border-r border-t border-garis bg-latar px-2 py-2 text-right">
-                      <Rupiah nilai={r.totalPagu} juta />
+                      <Rupiah nilai={r.totalPagu} />
                     </td>
                     {kolom.map((k) => (
                       <td key={k._id} className="angka border-r border-t border-garis bg-latar px-2 py-2 text-right">
-                        <Rupiah nilai={r.totalKolom[k._id] ?? 0} juta />
+                        <Rupiah nilai={r.totalKolom[k._id] ?? 0} />
                       </td>
                     ))}
                     <td className="angka border-r border-t border-garis bg-latar px-2 py-2 text-right">
-                      <Rupiah nilai={r.totalAlokasi} juta />
+                      <Rupiah nilai={r.totalAlokasi} />
                     </td>
                   </tr>
                 </tbody>

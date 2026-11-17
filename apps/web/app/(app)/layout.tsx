@@ -14,6 +14,7 @@ export default async function LayoutAplikasi({ children }: { children: React.Rea
   const notif = aktif ? await hitungNotifikasiTerbuka(user, String(aktif._id)) : { total: 0, kritis: 0 };
   const opsi = semua.map((t) => ({ _id: String(t._id), nama: t.nama, tahun: t.tahun, status: t.status }));
   const menu = {
+    rekap: user.peran !== 'skpd',
     perbedaan: boleh(user, 'lihat_perbedaan'),
     master: user.peran !== 'skpd',
     tahapan: boleh(user, 'kelola_tahapan'),

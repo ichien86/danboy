@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2, CircleCheckBig, CircleDashed, OctagonAlert
 import { formatRupiah, type StatusSumberDana as Status } from '@danboy/core';
 import { Lencana, cx } from './ui';
 
-/** Format Rp 1.234.567, rata kanan, opsi tampil dalam juta. */
+/** Format Rp1.234.567 (tanpa spasi), rata kanan, opsi tampil dalam juta. */
 export function Rupiah({ nilai, juta, className, negatifMerah = true }: { nilai: number | null | undefined; juta?: boolean; className?: string; negatifMerah?: boolean }) {
   return (
     <span className={cx('angka whitespace-nowrap', negatifMerah && typeof nilai === 'number' && nilai < 0 && 'text-bahaya', className)} title={juta && nilai != null ? formatRupiah(nilai) : undefined}>

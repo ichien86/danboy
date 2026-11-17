@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { boleh } from '@danboy/core';
 import { rekapSumberDana } from '@danboy/core/services';
 import { Rupiah, StatusSumberDana } from '@/components/domain';
@@ -11,12 +12,13 @@ export const metadata: Metadata = { title: 'Rekap Sumber Dana' };
 
 export default async function RekapSumberDana({ searchParams }: { searchParams: SP }) {
   const { user, tahapan, sp } = await konteksHalaman(searchParams);
+  if (user.peran === 'skpd') redirect('/dasbor'); // rekap sumber dana tidak ditampilkan untuk akun SKPD
   if (!tahapan) return <TanpaTahapan superAdmin={user.peran === 'super_admin'} />;
   const id = String(tahapan._id);
   const r = await rekapSumberDana(user, id);
   const filter = sp.status;
   const baris = filter ? r.baris.filter((b) => b.status === filter) : r.baris;
-  const skpd = user.peran === 'skpd';
+  const skpd: boolean = false; // akun SKPD sudah dialihkan ke dasbor di atas
   const bolehPagu = boleh(user, 'isi_pagu') && tahapan.status === 'terbuka';
 
   return (

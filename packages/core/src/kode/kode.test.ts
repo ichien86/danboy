@@ -46,9 +46,9 @@ describe('rupiah', () => {
     expect(parseRupiah('')).toBeNull();
   });
   it('format', () => {
-    expect(formatRupiah(1234567)).toBe('Rp 1.234.567');
+    expect(formatRupiah(1234567)).toBe('Rp1.234.567');
     expect(formatRupiah(null)).toBe('–');
-    expect(formatRupiah(2_500_000, { juta: true })).toBe('Rp 2,5 jt');
+    expect(formatRupiah(2_500_000, { juta: true })).toBe('Rp2,5 jt');
   });
 });
 

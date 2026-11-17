@@ -88,7 +88,7 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
                           {d.alokasi.map((a, i) => (
                             <li key={i} className="flex justify-between gap-3 text-xs">
                               <span className="truncate">{a.sumberDanaId?.nama ?? '?'}</span>
-                              <Rupiah nilai={a.nilai} juta />
+                              <Rupiah nilai={a.nilai} />
                             </li>
                           ))}
                         </ul>
@@ -115,7 +115,7 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
                   <TD>
                     <span className="flex justify-between gap-3 text-xs">
                       <span>Alokasi</span>
-                      <Rupiah nilai={r.jumlah.alokasi} juta />
+                      <Rupiah nilai={r.jumlah.alokasi} />
                     </span>
                   </TD>
                   <TD kanan>

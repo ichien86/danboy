@@ -37,7 +37,7 @@ export async function api<T = unknown>(path: string, opsi: { method?: string; bo
 export const pesanGalat = (e: unknown) => (e instanceof Error ? e.message : 'Terjadi kesalahan');
 
 const fmt = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 });
-export const rp = (n: number | null | undefined) => (n === null || n === undefined ? '–' : `Rp ${fmt.format(n)}`);
+export const rp = (n: number | null | undefined) => (n === null || n === undefined ? '–' : `Rp${fmt.format(n)}`);
 
 /** Baca angka rupiah dari input pengguna: hanya digit, pemisah ribuan diabaikan. */
 export function bacaAngka(s: string): number | null {

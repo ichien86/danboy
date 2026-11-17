@@ -25,6 +25,7 @@ import { PintasanCari, TautanNav } from '@/components/klien';
 import { keluar } from './aksi';
 
 interface Menu {
+  rekap: boolean;
   perbedaan: boolean;
   master: boolean;
   tahapan: boolean;
@@ -45,7 +46,7 @@ function Navigasi({ menu, pengguna }: { menu: Menu; pengguna: { nama: string; pe
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4" aria-label="Menu utama">
         <div className="space-y-0.5">
           <TautanNav href="/dasbor" ikon={<LayoutDashboard />}>Dasbor</TautanNav>
-          <TautanNav href="/rekap-sumber-dana" ikon={<PieChart />}>Rekap Sumber Dana</TautanNav>
+          {menu.rekap && <TautanNav href="/rekap-sumber-dana" ikon={<PieChart />}>Rekap Sumber Dana</TautanNav>}
           <TautanNav href="/subkegiatan" ikon={<ClipboardList />}>Subkegiatan</TautanNav>
           <TautanNav href="/matriks" ikon={<Grid3x3 />}>Matriks</TautanNav>
           {menu.perbedaan && <TautanNav href="/perbedaan" ikon={<ArrowLeftRight />}>Perbedaan SIPD</TautanNav>}

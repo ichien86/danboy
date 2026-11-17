@@ -15,6 +15,12 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
   const id = String(tahapan._id);
   const [r, notif] = await Promise.all([ringkasanDasbor(user, id), daftarNotifikasi(user, { tahapanId: id, status: 'terbuka', limit: 6 })]);
   const a = r.angka;
+  const skpd = user.peran === 'skpd';
+  // akun SKPD: hanya alokasi perangkat daerahnya sendiri per sumber dana
+  const sdSkpd = (r.rekap as unknown as { sumberDanaId: string; nama: string; terpakaiSkpd?: number; jumlahSubkegiatan: number }[])
+    .map((b) => ({ id: b.sumberDanaId, nama: b.nama, nilai: b.terpakaiSkpd ?? 0, jumlah: b.jumlahSubkegiatan }))
+    .filter((b) => b.nilai > 0)
+    .sort((x, y) => y.nilai - x.nilai);
   const selisih = a.pagu - a.alokasi;
   const grafik = r.rekap
     .filter((b) => b.terpakai > 0 || (b.pagu ?? 0) > 0)
@@ -28,6 +34,7 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
         judul="Dasbor"
         sub={
           <span className="inline-flex flex-wrap items-center gap-2">
+            {skpd && r.perSkpd[0] && <strong className="font-semibold text-teks">{r.perSkpd[0].nama}</strong>}
             {tahapan.nama} <StatusTahapan status={tahapan.status} />
             <span>
               Jadwal {tanggal(tahapan.jadwalMulai)} – {tanggal(tahapan.jadwalSelesai)}
@@ -35,9 +42,15 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
           </span>
         }
         aksi={
-          <TautanTombol href={`/api/ekspor/rekap?tahapanId=${id}`} kecil>
-            Unduh rekap (Excel)
-          </TautanTombol>
+          skpd ? (
+            <TautanTombol href={`/api/ekspor/subkegiatan?tahapanId=${id}`} kecil>
+              Unduh subkegiatan (Excel)
+            </TautanTombol>
+          ) : (
+            <TautanTombol href={`/api/ekspor/rekap?tahapanId=${id}`} kecil>
+              Unduh rekap (Excel)
+            </TautanTombol>
+          )
         }
       />
       {tahapan.status !== 'terbuka' && (
@@ -56,18 +69,62 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
           nada={selisih === 0 ? 'aman' : 'waspada'}
         />
         <Statistik label="Alokasi belum seimbang" nilai={a.tidakSeimbang} sub="subkegiatan (R4)" nada={a.tidakSeimbang ? 'waspada' : 'aman'} />
-        <Statistik
-          label="Sumber dana melebihi pagu"
-          nilai={r.totalRekap.melebihi}
-          sub={`${r.totalRekap.komplit} komplit · ${r.totalRekap.mendekati} mendekati · ${r.totalRekap.belumDiisi} pagu belum diisi`}
-          nada={r.totalRekap.melebihi ? 'bahaya' : 'aman'}
-        />
+        {skpd ? (
+          <Statistik label="Sumber dana digunakan" nilai={sdSkpd.length} sub={`${r.perSubUnit.length} sub unit`} />
+        ) : (
+          <Statistik
+            label="Sumber dana melebihi pagu"
+            nilai={r.totalRekap.melebihi}
+            sub={`${r.totalRekap.komplit} komplit · ${r.totalRekap.mendekati} mendekati · ${r.totalRekap.belumDiisi} pagu belum diisi`}
+            nada={r.totalRekap.melebihi ? 'bahaya' : 'aman'}
+          />
+        )}
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
-        <Kartu judul="Pagu vs terpakai per sumber dana (10 terbesar)" className="xl:col-span-2">
-          {grafik.length ? <GrafikPagu data={grafik} /> : <Kosong judul="Belum ada data">Impor rincian APBD dari SIPD untuk melihat grafik.</Kosong>}
-        </Kartu>
+        {skpd ? (
+          <Kartu judul="Alokasi per sumber dana" padat className="xl:col-span-2">
+            {sdSkpd.length ? (
+              <Tabel>
+                <thead>
+                  <tr>
+                    <TH>Sumber dana</TH>
+                    <TH kanan>Subkegiatan</TH>
+                    <TH kanan>Alokasi</TH>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sdSkpd.map((b) => (
+                    <tr key={b.id}>
+                      <TD>
+                        <Link href={`/subkegiatan?sumberDana=${b.id}`} className="hover:underline">
+                          {b.nama}
+                        </Link>
+                      </TD>
+                      <TD kanan>{b.jumlah}</TD>
+                      <TD kanan>
+                        <Rupiah nilai={b.nilai} />
+                      </TD>
+                    </tr>
+                  ))}
+                  <tr className="bg-latar font-semibold">
+                    <TD>Jumlah</TD>
+                    <TD />
+                    <TD kanan>
+                      <Rupiah nilai={a.alokasi} />
+                    </TD>
+                  </tr>
+                </tbody>
+              </Tabel>
+            ) : (
+              <Kosong judul="Belum ada data" />
+            )}
+          </Kartu>
+        ) : (
+          <Kartu judul="Pagu vs terpakai per sumber dana (10 terbesar)" className="xl:col-span-2">
+            {grafik.length ? <GrafikPagu data={grafik} /> : <Kosong judul="Belum ada data">Impor rincian APBD dari SIPD untuk melihat grafik.</Kosong>}
+          </Kartu>
+        )}
         <Kartu
           judul="Notifikasi terbuka"
           padat
@@ -101,7 +158,47 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
         </Kartu>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+      {skpd && (
+        <div className="mt-4">
+          <Kartu judul="Pagu per sub unit" padat>
+            <Tabel>
+              <thead>
+                <tr>
+                  <TH>Sub unit</TH>
+                  <TH kanan>Subkegiatan</TH>
+                  <TH kanan>Pagu</TH>
+                  <TH kanan>Alokasi sumber dana</TH>
+                </tr>
+              </thead>
+              <tbody>
+                {r.perSubUnit.map((s, i) => (
+                  <tr key={i}>
+                    <TD>{s.nama}</TD>
+                    <TD kanan>{s.jumlah}</TD>
+                    <TD kanan>
+                      <Rupiah nilai={s.pagu} />
+                    </TD>
+                    <TD kanan className={s.alokasi !== s.pagu ? 'text-waspada' : undefined}>
+                      <Rupiah nilai={s.alokasi} />
+                    </TD>
+                  </tr>
+                ))}
+                <tr className="bg-latar font-semibold">
+                  <TD>Jumlah</TD>
+                  <TD kanan>{a.jumlah}</TD>
+                  <TD kanan>
+                    <Rupiah nilai={a.pagu} />
+                  </TD>
+                  <TD kanan>
+                    <Rupiah nilai={a.alokasi} />
+                  </TD>
+                </tr>
+              </tbody>
+            </Tabel>
+          </Kartu>
+        </div>
+      )}
+      <div className={skpd ? 'hidden' : 'mt-4 grid gap-4 xl:grid-cols-2'}>
         <Kartu judul="Status sumber dana" padat aksi={<Link href="/rekap-sumber-dana" className="text-xs font-medium text-utama hover:underline">Rekap lengkap</Link>}>
           <Tabel>
             <thead>

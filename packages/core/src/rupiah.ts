@@ -4,9 +4,10 @@ export function formatRupiah(n: number | null | undefined, opsi: { juta?: boolea
   if (n === null || n === undefined || Number.isNaN(n)) return '–';
   if (opsi.juta) {
     const j = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(n / 1_000_000);
-    return `${opsi.tanpaRp ? '' : 'Rp '}${j} jt`;
+    return `${opsi.tanpaRp ? '' : 'Rp'}${j} jt`;
   }
-  return `${opsi.tanpaRp ? '' : 'Rp '}${fmt.format(n)}`;
+  // tanpa spasi: Rp2.000.000; nilai negatif ditulis -Rp2.000.000
+  return `${n < 0 ? '-' : ''}${opsi.tanpaRp ? '' : 'Rp'}${fmt.format(Math.abs(n))}`;
 }
 
 /**

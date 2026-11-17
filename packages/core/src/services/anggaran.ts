@@ -530,11 +530,19 @@ export async function ringkasanDasbor(user: SessionUser, tahapanId: string) {
     { $limit: 10 },
     { $lookup: { from: 'skpd', localField: '_id', foreignField: '_id', as: 'skpd' } },
   ]);
+  // rincian per sub unit: dipakai dasbor akun SKPD (data perangkat daerahnya sendiri beserta sub unitnya)
+  const perSubUnit = await SubkegiatanTahapan.aggregate<{ _id: unknown; pagu: number; alokasi: number; jumlah: number; subUnit: { kode?: string; nama: string }[] }>([
+    { $match: { tahapanId: t._id, status: 'aktif', ...c } },
+    { $group: { _id: '$subUnitId', pagu: { $sum: '$pagu' }, alokasi: { $sum: { $sum: '$alokasi.nilai' } }, jumlah: { $sum: 1 } } },
+    { $lookup: { from: 'subUnit', localField: '_id', foreignField: '_id', as: 'subUnit' } },
+    { $sort: { 'subUnit.kode': 1 } },
+  ]);
   const rekap = await rekapSumberDana(user, tahapanId);
   return ser({
     tahapan: t,
     angka: agg ?? { jumlah: 0, pagu: 0, alokasi: 0, tidakSeimbang: 0, beda: 0, hilang: 0 },
     perSkpd: perSkpd.map((p) => ({ nama: (p as unknown as { skpd: { nama: string }[] }).skpd[0]?.nama ?? '?', pagu: p.pagu, jumlah: p.jumlah })),
+    perSubUnit: perSubUnit.map((p) => ({ nama: p.subUnit[0]?.nama ?? '?', kode: p.subUnit[0]?.kode ?? '', pagu: p.pagu, alokasi: p.alokasi, jumlah: p.jumlah })),
     rekap: rekap.baris,
     totalRekap: rekap.total,
   });
