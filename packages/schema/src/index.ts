@@ -199,6 +199,9 @@ export const subkegiatanBaru = z
   })
   .strict();
 
+/** Ubah pagu subkegiatan secara manual (Admin); updatedAt untuk konkurensi optimistis. */
+export const subkegiatanUbah = z.object({ updatedAt: z.string().min(1), pagu: uang }).strict();
+
 /** Baris rincian APBD ekspor SIPD setelah header dicocokkan. */
 export const barisApbd = z.object({
   TAHUN: z.coerce.number().int(),

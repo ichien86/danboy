@@ -382,6 +382,47 @@ export async function tambahSubkegiatan(user: SessionUser, tahapanId: string, in
   return ser({ dokumen: baru.toObject(), tagging: await taggingKode(t.tahun, kode) });
 }
 
+/** PATCH /api/subkegiatan/{id}: ubah pagu. Alokasi sumber dana tidak disentuh, jadi bisa menjadi belum seimbang (R4). */
+export async function ubahPaguSubkegiatan(user: SessionUser, id: string, input: { updatedAt: string; pagu: number }) {
+  pastikanBoleh(user, 'impor');
+  await sambung();
+  const d = await muatSubkegiatan(user, id);
+  await pastikanTahapanTerbuka(d.tahapanId);
+  const berubah = () => new Galat('DATA_BERUBAH', 'Data sudah diubah orang lain. Muat ulang untuk melihat versi terbaru.');
+  if (new Date(d.updatedAt).toISOString() !== new Date(input.updatedAt).toISOString()) throw berubah();
+  const baru = await SubkegiatanTahapan.findOneAndUpdate(
+    { _id: d._id, updatedAt: d.updatedAt },
+    { $set: { pagu: input.pagu, seimbang: d.alokasi.reduce((s, a) => s + a.nilai, 0) === input.pagu } },
+    { new: true },
+  ).lean<SubkegiatanTahapanDoc>();
+  if (!baru) throw berubah();
+  await segarkanNotifikasi(d.tahapanId);
+  return ser({ dokumen: baru });
+}
+
+/** DELETE /api/subkegiatan/{id}: hapus subkegiatan dari tahapan; isi sebelum dihapus dicatat di log audit. */
+export async function hapusSubkegiatan(user: SessionUser, id: string) {
+  pastikanBoleh(user, 'impor');
+  await sambung();
+  const d = await muatSubkegiatan(user, id);
+  await pastikanTahapanTerbuka(d.tahapanId);
+  await dalamTransaksi(async (session) => {
+    const r = await SubkegiatanTahapan.deleteOne({ _id: d._id }, { session });
+    if (!r.deletedCount) throw tidakDitemukan('Subkegiatan');
+    await catatAudit(
+      {
+        aksi: 'hapus',
+        koleksi: 'subkegiatanTahapan',
+        dokumenId: d._id,
+        sebelum: { tahapanId: d.tahapanId, skpdId: d.skpdId, subUnitId: d.subUnitId, kodeSubkegiatan: d.kodeSubkegiatan, namaSubkegiatan: d.namaSubkegiatan, pagu: d.pagu, alokasi: d.alokasi },
+      },
+      session,
+    );
+  });
+  await segarkanNotifikasi(d.tahapanId);
+  return { ok: true };
+}
+
 /** Sisa pagu sumber dana yang tersentuh, agar tampilan langsung memperbarui angka. */
 async function ringkasanSisa(tahapanId: ReturnType<typeof oid>, sdIds: string[], session?: ClientSession) {
   const terpakai = await terpakaiPerSumberDana(tahapanId, {}, session);

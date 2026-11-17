@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, bacaAngka, pesanGalat, rp, tulisAngka, GalatApi } from '@/lib/klien';
@@ -260,7 +260,85 @@ export function PanelAlokasi({ d, bolehUbah, onTersimpan }: { d: Detail; bolehUb
 const TAB = ['alokasi', 'sipd', 'rincian', 'tagging', 'riwayat'] as const;
 const LABEL_TAB = { alokasi: 'Alokasi', sipd: 'Banding SIPD', rincian: 'Rincian rekening', tagging: 'Tagging', riwayat: 'Riwayat' };
 
-export function DetailSubkegiatan({ id, bolehUbah, onBerubah }: { id: string; bolehUbah: boolean; onBerubah?: () => void }) {
+/** Ubah pagu / hapus subkegiatan (Admin, tahapan terbuka). */
+function AksiSubkegiatan({ d, onBerubah, onDihapus }: { d: Detail; onBerubah: () => void; onDihapus: () => void }) {
+  const toast = useToast();
+  const [ubah, setUbah] = useState(false);
+  const [teks, setTeks] = useState(tulisAngka(d.pagu));
+  const [memuat, setMemuat] = useState(false);
+  const [galat, setGalat] = useState('');
+  useEffect(() => {
+    setTeks(tulisAngka(d.pagu));
+    setUbah(false);
+    setGalat('');
+  }, [d]);
+
+  const simpan = async () => {
+    const pagu = bacaAngka(teks);
+    if (pagu === null) return setGalat('Isi pagu (boleh 0)');
+    setMemuat(true);
+    setGalat('');
+    try {
+      await api(`/api/subkegiatan/${d._id}`, { method: 'PATCH', body: { updatedAt: d.updatedAt, pagu } });
+      toast('Pagu disimpan');
+      onBerubah();
+    } catch (e) {
+      setGalat(pesanGalat(e));
+      if (e instanceof GalatApi && e.kode === 'DATA_BERUBAH') onBerubah();
+    } finally {
+      setMemuat(false);
+    }
+  };
+  const hapus = async () => {
+    if (!confirm(`Hapus subkegiatan ${d.kodeSubkegiatan} ${d.namaSubkegiatan} (${d.subUnit?.nama ?? ''}, pagu ${rp(d.pagu)})?\n\nSubkegiatan beserta alokasi sumber dananya dihapus dari tahapan ${d.tahapan.nama} dan tidak bisa dikembalikan.`)) return;
+    setMemuat(true);
+    try {
+      await api(`/api/subkegiatan/${d._id}`, { method: 'DELETE' });
+      toast('Subkegiatan dihapus');
+      onDihapus();
+    } catch (e) {
+      setGalat(pesanGalat(e));
+      setMemuat(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2">
+      {galat && <Peringatan nada="bahaya">{galat}</Peringatan>}
+      {ubah ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            inputMode="numeric"
+            aria-label="Pagu subkegiatan"
+            value={teks}
+            onChange={(e) => setTeks(tulisAngka(bacaAngka(e.target.value)))}
+            className="angka h-9 w-48 rounded-md border border-garis bg-permukaan px-3 text-right text-sm"
+            placeholder="0"
+            autoFocus
+          />
+          <Tombol type="button" kecil varian="utama" memuat={memuat} onClick={simpan}>
+            Simpan pagu
+          </Tombol>
+          <Tombol type="button" kecil onClick={() => setUbah(false)}>
+            Batal
+          </Tombol>
+          <p className="w-full text-xs text-redup">Alokasi sumber dana tidak ikut berubah; sesuaikan di tab Alokasi agar seimbang.</p>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Tombol type="button" kecil onClick={() => setUbah(true)}>
+            <Pencil className="size-3.5" /> Ubah pagu
+          </Tombol>
+          <Tombol type="button" kecil varian="hantu" className="text-bahaya" memuat={memuat} onClick={hapus}>
+            <Trash2 className="size-3.5" /> Hapus subkegiatan
+          </Tombol>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function DetailSubkegiatan({ id, bolehUbah, onBerubah, onDihapus }: { id: string; bolehUbah: boolean; onBerubah?: () => void; onDihapus?: () => void }) {
   const [d, setD] = useState<Detail | null>(null);
   const [galat, setGalat] = useState('');
   const [tab, setTab] = useState<(typeof TAB)[number]>('alokasi');
@@ -309,6 +387,10 @@ export function DetailSubkegiatan({ id, bolehUbah, onBerubah }: { id: string; bo
             </Lencana>
           ))}
         </div>
+        <p className="mt-2 text-sm">
+          Pagu <span className="angka font-semibold">{rp(d.pagu)}</span>
+        </p>
+        {bolehUbah && onDihapus && d.tahapan.status === 'terbuka' && <AksiSubkegiatan d={d} onBerubah={sesudahUbah} onDihapus={onDihapus} />}
       </div>
 
       {d.beda.ada && bolehUbah && d.tahapan.status === 'terbuka' && (
@@ -440,7 +522,17 @@ export function DrawerSubkegiatan({ bolehUbah }: { bolehUbah: boolean }) {
   const judul = useMemo(() => 'Detail subkegiatan', []);
   return (
     <Modal buka={!!id} setBuka={(b) => !b && tutup()} judul={judul} samping>
-      {id && <DetailSubkegiatan id={id} bolehUbah={bolehUbah} onBerubah={() => router.refresh()} />}
+      {id && (
+        <DetailSubkegiatan
+          id={id}
+          bolehUbah={bolehUbah}
+          onBerubah={() => router.refresh()}
+          onDihapus={() => {
+            tutup();
+            router.refresh();
+          }}
+        />
+      )}
     </Modal>
   );
 }

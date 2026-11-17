@@ -477,7 +477,7 @@ describe('alur impor end-to-end (service + model)', () => {
     expect(r.namaFile).toMatch(/rekap/);
   });
 
-  it('tambah subkegiatan manual: kode dari master, X.XX diganti bidang urusan, info tagging, hanya Admin', async () => {
+  it('tambah, ubah pagu, hapus subkegiatan manual: kode dari master, X.XX diganti bidang urusan, info tagging, hanya Admin', async () => {
     const { Nomenklatur, SubUnit } = await import('@danboy/db');
     const t = (await Tahapan.findOne({ status: 'terbuka' }).sort({ _id: -1 }).lean())!;
     const tid = String(t._id);
@@ -518,6 +518,20 @@ describe('alur impor end-to-end (service + model)', () => {
     const r2 = await svc.tambahSubkegiatan(admin, tid, { subUnitId: String(bebas._id), kodeNomenklatur: '1.01.02.2.02.0025', pagu: 7_000_000, sumberDanaId: String(sg._id) });
     expect(r2.tagging.length).toBeGreaterThan(0);
     expect(r2.dokumen).toMatchObject({ seimbang: true, alokasi: [{ nilai: 7_000_000, asal: 'admin' }] });
-    await SubkegiatanTahapan.deleteMany({ _id: { $in: [r.dokumen._id, r2.dokumen._id] } });
+    // ubah pagu: alokasi tetap, jadi belum seimbang; konkurensi optimistis; akun SKPD ditolak
+    await expect(svc.ubahPaguSubkegiatan(skpd, String(r2.dokumen._id), { updatedAt: String(r2.dokumen.updatedAt), pagu: 1 })).rejects.toMatchObject({ http: 403 });
+    const u = await svc.ubahPaguSubkegiatan(admin, String(r2.dokumen._id), { updatedAt: String(r2.dokumen.updatedAt), pagu: 9_000_000 });
+    expect(u.dokumen).toMatchObject({ pagu: 9_000_000, seimbang: false, alokasi: [{ nilai: 7_000_000 }] });
+    await expect(svc.ubahPaguSubkegiatan(admin, String(r2.dokumen._id), { updatedAt: String(r2.dokumen.updatedAt), pagu: 1 })).rejects.toMatchObject({ kode: 'DATA_BERUBAH' });
+    expect(await Notifikasi.countDocuments({ aturan: 'R4', status: 'terbuka', subkegiatanTahapanId: r2.dokumen._id })).toBe(1);
+
+    // hapus: hanya Admin; tercatat di log audit; notifikasinya tertutup
+    await expect(svc.hapusSubkegiatan(skpd, String(r.dokumen._id))).rejects.toMatchObject({ http: 403 });
+    await svc.hapusSubkegiatan(admin, String(r.dokumen._id));
+    await svc.hapusSubkegiatan(admin, String(r2.dokumen._id));
+    expect(await SubkegiatanTahapan.countDocuments({ _id: { $in: [r.dokumen._id, r2.dokumen._id] } })).toBe(0);
+    expect(await LogAudit.countDocuments({ aksi: 'hapus', koleksi: 'subkegiatanTahapan', dokumenId: { $in: [r.dokumen._id, r2.dokumen._id] } })).toBe(2);
+    expect(await Notifikasi.countDocuments({ status: 'terbuka', subkegiatanTahapanId: { $in: [r.dokumen._id, r2.dokumen._id] } })).toBe(0);
+    await expect(svc.hapusSubkegiatan(admin, String(r.dokumen._id))).rejects.toMatchObject({ http: 404 });
   });
 });
