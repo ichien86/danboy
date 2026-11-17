@@ -14,7 +14,7 @@ export async function FilterSubkegiatan({
   sp: Record<string, string | undefined>;
   dasar: string;
   status?: boolean;
-  /** Tampilkan saringan banyaknya sumber dana per subkegiatan. */
+  /** Tampilkan kotak centang: lebih dari satu sumber dana, beda dengan tagging. */
   jumlahSd?: boolean;
 }) {
   const [skpd, sd] = await Promise.all([user.peran === 'skpd' ? [] : daftarSkpd(user), daftarSumberDana(user)]);
@@ -51,6 +51,12 @@ export async function FilterSubkegiatan({
         <label className="flex cursor-pointer items-center gap-2 py-2 text-sm">
           <input type="checkbox" name="jumlahSd" value="dua_lebih" defaultChecked={sp.jumlahSd === 'dua_lebih'} className="h-4 w-4" />
           Lebih dari satu sumber dana
+        </label>
+      )}
+      {jumlahSd && (
+        <label className="flex cursor-pointer items-center gap-2 py-2 text-sm" title="Subkegiatan ada di daftar tagging, tetapi tidak memakai sumber dana tagging-nya">
+          <input type="checkbox" name="bedaTagging" value="1" defaultChecked={!!sp.bedaTagging} className="h-4 w-4" />
+          Beda dengan tagging
         </label>
       )}
       <div className="flex gap-2">

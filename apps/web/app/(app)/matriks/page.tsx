@@ -14,7 +14,7 @@ export default async function Matriks({ searchParams }: { searchParams: SP }) {
   const { user, tahapan, sp } = await konteksHalaman(searchParams);
   if (!tahapan) return <TanpaTahapan superAdmin={user.peran === 'super_admin'} />;
   const page = num(sp.page, 1);
-  const r = await matriks(user, String(tahapan._id), { q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status as 'beda' | undefined, jumlahSd: sp.jumlahSd as 'satu' | undefined, page, limit: 100 });
+  const r = await matriks(user, String(tahapan._id), { q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status as 'beda' | undefined, jumlahSd: sp.jumlahSd as 'satu' | undefined, bedaTagging: sp.bedaTagging, page, limit: 100 });
   const kolom = r.kolom as unknown as { _id: string; kode: string; nama: string }[];
   const { id: _i, page: _p, ...param } = sp;
   void _i, _p;
@@ -25,7 +25,7 @@ export default async function Matriks({ searchParams }: { searchParams: SP }) {
       <KepalaHalaman
         judul="Matriks subkegiatan × sumber dana"
         sub={`${tahapan.nama} · ${r.total} subkegiatan × ${kolom.length} sumber dana`}
-        aksi={<TautanTombol href={`/api/ekspor/matriks?${new URLSearchParams(Object.entries({ q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status, jumlahSd: sp.jumlahSd, tahapanId: String(tahapan._id) }).filter(([, v]) => v) as [string, string][])}`}>Unduh Excel</TautanTombol>}
+        aksi={<TautanTombol href={`/api/ekspor/matriks?${new URLSearchParams(Object.entries({ q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status, jumlahSd: sp.jumlahSd, bedaTagging: sp.bedaTagging, tahapanId: String(tahapan._id) }).filter(([, v]) => v) as [string, string][])}`}>Unduh Excel</TautanTombol>}
       />
       <FilterSubkegiatan user={user} sp={sp} dasar="/matriks" jumlahSd />
       <Kartu padat>

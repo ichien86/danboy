@@ -34,11 +34,15 @@ interface Calon {
   detail?: Record<string, unknown>;
 }
 
-/** Aturan yang dihitung ulang penuh untuk satu tahapan; R9 dikelola per batch impor. */
+/**
+ * Aturan yang dihitung ulang penuh untuk satu tahapan; R9 dikelola per batch impor.
+ * R6 (tertagging, didanai sumber lain) tidak dijadikan notifikasi: cukup lencana di detail dan saringan
+ * "Beda dengan tagging". Tetap di daftar ini agar notifikasi R6 lama tertutup saat dihitung ulang.
+ */
 const ATURAN_TAHAPAN = ['R2', 'R3', 'R4', 'R5', 'R6', 'R8'];
 
 /**
- * Hitung ulang notifikasi R2, R3, R4, R5, R6, R8 untuk satu tahapan.
+ * Hitung ulang notifikasi R2, R3, R4, R5, R8 untuk satu tahapan.
  * Upsert berdasarkan kunciUnik: satu masalah = satu notifikasi terbuka; yang masalahnya hilang ditutup otomatis.
  * Notifikasi yang diabaikan Admin tidak dibuat ulang.
  */
@@ -58,12 +62,6 @@ export async function segarkanNotifikasi(tahapanId: unknown, session?: ClientSes
   ]);
   const sdPer = new Map(sdList.map((s) => [String(s._id), s]));
   const tagged = new Set(tagging.map((t) => `${t.sumberDanaId}|${t.kodeSubkegiatan}`));
-  const sdTaggingPerKode = new Map<string, Set<string>>();
-  for (const x of tagging) {
-    const set = sdTaggingPerKode.get(x.kodeSubkegiatan) ?? new Set<string>();
-    set.add(String(x.sumberDanaId));
-    sdTaggingPerKode.set(x.kodeSubkegiatan, set);
-  }
   const calon: Calon[] = [];
   const terpakai = new Map<string, number>();
   const t = String(tId);
@@ -121,21 +119,6 @@ export async function segarkanNotifikasi(tahapanId: unknown, session?: ClientSes
         skpdId: d.skpdId,
         subkegiatanTahapanId: d._id,
         sumberDanaId: a.sumberDanaId,
-      });
-    }
-    // R6: tertagging untuk sumber dana tertentu, tetapi sumber dana itu tidak dipakai (didanai sumber lain)
-    const sdTagging = new Set(kandidatKodeNomenklatur(d.kodeSubkegiatan).flatMap((k) => [...(sdTaggingPerKode.get(k) ?? [])]));
-    for (const sid of sdTagging) {
-      if (d.alokasi.some((a) => String(a.sumberDanaId) === sid && a.nilai > 0)) continue;
-      calon.push({
-        kunciUnik: `R6:${t}:${id}:${sid}`,
-        aturan: 'R6',
-        tingkat: 'peringatan',
-        pesan: `${label} tertagging ${sdPer.get(sid)?.nama ?? 'sumber dana khusus'} tetapi didanai sumber lain`,
-        tautan: `/subkegiatan?id=${id}`,
-        skpdId: d.skpdId,
-        subkegiatanTahapanId: d._id,
-        sumberDanaId: oid(sid),
       });
     }
   }

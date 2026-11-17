@@ -29,7 +29,7 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
   const { user, tahapan, sp } = await konteksHalaman(searchParams);
   if (!tahapan) return <TanpaTahapan superAdmin={user.peran === 'super_admin'} />;
   const page = num(sp.page, 1);
-  const filter = { q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status as 'beda' | undefined, jumlahSd: sp.jumlahSd as 'satu' | undefined };
+  const filter = { q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status as 'beda' | undefined, jumlahSd: sp.jumlahSd as 'satu' | undefined, bedaTagging: sp.bedaTagging };
   const r = await daftarSubkegiatan(user, String(tahapan._id), { ...filter, page, limit: 50 });
   const { id: _id, page: _p, ...param } = sp;
   void _id, _p;
@@ -50,7 +50,7 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
                 nonaktif={tahapan.status === 'terbuka' ? undefined : `Tahapan ${tahapan.nama} tidak terbuka; impor ditolak (R10)`}
               />
             )}
-            <TautanTombol href={`/api/ekspor/subkegiatan?${new URLSearchParams(Object.entries({ q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status, jumlahSd: sp.jumlahSd, tahapanId: String(tahapan._id) }).filter(([, v]) => v) as [string, string][])}`}>Unduh Excel</TautanTombol>
+            <TautanTombol href={`/api/ekspor/subkegiatan?${new URLSearchParams(Object.entries({ q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status, jumlahSd: sp.jumlahSd, bedaTagging: sp.bedaTagging, tahapanId: String(tahapan._id) }).filter(([, v]) => v) as [string, string][])}`}>Unduh Excel</TautanTombol>
           </>
         }
       />

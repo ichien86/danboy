@@ -130,6 +130,36 @@ export async function subkegiatanPerSumberDana(user: SessionUser, tahapanId: str
   return ser({ sumberDana: sdDoc, data: data.map((d) => ({ ...d, skpd: d.skpd[0], subUnit: d.subUnit[0] })), total, page, limit });
 }
 
+/**
+ * Id subkegiatan yang "beda dengan tagging" (R6): ada di daftar tagging tahun itu, tetapi ada sumber dana
+ * tagging-nya yang tidak dipakai (alokasi 0 atau tidak ada). Dihitung saat diminta, tidak disimpan.
+ */
+async function idBedaTagging(user: SessionUser, t: { _id: ReturnType<typeof oid>; tahun: number }) {
+  const [tagging, docs] = await Promise.all([
+    Tagging.find({ tahun: t.tahun }).select('sumberDanaId kodeSubkegiatan').lean(),
+    SubkegiatanTahapan.find({ tahapanId: t._id, ...cakupanDb(user) }).select('kodeSubkegiatan alokasi').lean<SubkegiatanTahapanDoc[]>(),
+  ]);
+  const sdPerKode = new Map<string, Set<string>>();
+  for (const x of tagging) {
+    const set = sdPerKode.get(x.kodeSubkegiatan) ?? new Set<string>();
+    set.add(String(x.sumberDanaId));
+    sdPerKode.set(x.kodeSubkegiatan, set);
+  }
+  return docs
+    .filter((d) => {
+      const dipakai = new Set(d.alokasi.filter((a) => a.nilai > 0).map((a) => String(a.sumberDanaId)));
+      return kandidatKodeNomenklatur(d.kodeSubkegiatan).some((k) => [...(sdPerKode.get(k) ?? [])].some((sid) => !dipakai.has(sid)));
+    })
+    .map((d) => d._id);
+}
+
+/** filterDaftar + saringan yang butuh data lain (beda dengan tagging). */
+async function filterDaftarLengkap(user: SessionUser, t: { _id: ReturnType<typeof oid>; tahun: number }, f: Partial<FilterSubkegiatan>) {
+  const filter = filterDaftar(user, t._id, f);
+  if (f.bedaTagging) filter._id = { $in: await idBedaTagging(user, t) };
+  return filter;
+}
+
 function filterDaftar(user: SessionUser, tahapanId: ReturnType<typeof oid>, f: Partial<FilterSubkegiatan>) {
   const filter: Record<string, unknown> = { tahapanId, ...cakupanDb(user) };
   if (f.skpd && user.peran !== 'skpd') filter.skpdId = oid(f.skpd);
@@ -173,7 +203,7 @@ async function jumlahDaftar(filter: Record<string, unknown>) {
 export async function daftarSubkegiatan(user: SessionUser, tahapanId: string, f: Partial<FilterSubkegiatan>) {
   pastikanBoleh(user, 'lihat');
   const t = await muatTahapan(tahapanId);
-  const filter = filterDaftar(user, t._id, f);
+  const filter = await filterDaftarLengkap(user, t, f);
   const page = f.page ?? 1;
   const limit = Math.min(f.limit ?? 50, 200);
   const [data, total, jumlah] = await Promise.all([
@@ -381,7 +411,7 @@ async function daftarSubkegiatanLengkap(user: SessionUser, tahapanId: string, f:
 export async function matriks(user: SessionUser, tahapanId: string, f: Partial<FilterSubkegiatan>) {
   pastikanBoleh(user, 'lihat');
   const t = await muatTahapan(tahapanId);
-  const filter = filterDaftar(user, t._id, f);
+  const filter = await filterDaftarLengkap(user, t, f);
   const kolomIds = await SubkegiatanTahapan.distinct('alokasi.sumberDanaId', { tahapanId: t._id, ...cakupanDb(user) });
   const kolom = await SumberDana.find({ _id: { $in: kolomIds } }).select('kode nama khusus').sort({ kode: 1 }).lean();
   const page = f.page ?? 1;

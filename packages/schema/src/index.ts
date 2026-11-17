@@ -180,6 +180,8 @@ export const filterSubkegiatan = paginasi.extend({
   status: z.enum(['semua', 'tidak_seimbang', 'beda', 'tidak_ada_di_impor']).optional(),
   /** Banyaknya sumber dana (alokasi bernilai > 0): satu, dua atau lebih, lebih dari dua. */
   jumlahSd: z.enum(['satu', 'dua_lebih', 'lebih_dua']).optional(),
+  /** Hanya subkegiatan tertagging yang tidak memakai sumber dana tagging-nya (R6). Nilai apa pun selain kosong = aktif. */
+  bedaTagging: z.string().max(10).optional(),
   q: z.string().trim().max(100).optional(),
 });
 
