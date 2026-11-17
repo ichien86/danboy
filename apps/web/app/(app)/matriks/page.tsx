@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { boleh } from '@danboy/core';
 import { matriks } from '@danboy/core/services';
 import { Rupiah } from '@/components/domain';
-import { FilterSubkegiatan } from '@/components/filter';
+import { FilterSubkegiatan, siapkanFilter } from '@/components/filter';
 import { DrawerSubkegiatan } from '@/components/subkegiatan';
 import { Kartu, KepalaHalaman, Kosong, Paginasi, TautanTombol, cx } from '@/components/ui';
 import { konteksHalaman, num, TanpaTahapan, type SP } from '@/lib/halaman';
@@ -13,6 +13,7 @@ export const metadata: Metadata = { title: 'Matriks' };
 export default async function Matriks({ searchParams }: { searchParams: SP }) {
   const { user, tahapan, sp } = await konteksHalaman(searchParams);
   if (!tahapan) return <TanpaTahapan superAdmin={user.peran === 'super_admin'} />;
+  siapkanFilter(user); // pilihan saringan dimuat bersamaan dengan data
   const page = num(sp.page, 1);
   const r = await matriks(user, String(tahapan._id), { q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status as 'beda' | undefined, jumlahSd: sp.jumlahSd as 'satu' | undefined, bedaTagging: sp.bedaTagging, page, limit: 100 });
   const kolom = r.kolom as unknown as { _id: string; kode: string; nama: string }[];

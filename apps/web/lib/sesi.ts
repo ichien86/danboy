@@ -3,7 +3,7 @@ import { cache } from 'react';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { SessionUser } from '@danboy/core';
-import { pilihTahapan, statusPengguna } from '@danboy/core/services';
+import { daftarTahapan, pilihDariDaftar, statusPengguna } from '@danboy/core/services';
 import { auth } from '@/auth';
 
 /**
@@ -32,11 +32,14 @@ export async function wajibSesi(): Promise<SessionUser> {
 
 export const COOKIE_TAHAPAN = 'danboy_tahapan';
 
-/** Tahapan aktif: ?tahapan= lalu cookie, lalu tahapan terbuka terbaru. */
+/** Daftar semua tahapan, dibaca sekali per permintaan (dipakai bersama kerangka dan halaman). */
+export const semuaTahapan = cache(() => daftarTahapan());
+
+/** Tahapan aktif: ?tahapan= lalu cookie, lalu tahapan terbuka terbaru. Dipilih dari semuaTahapan, tanpa kueri tambahan. */
 export async function tahapanAktif(searchParams?: { tahapan?: string | string[] }) {
   const dariUrl = typeof searchParams?.tahapan === 'string' ? searchParams.tahapan : undefined;
   const dariCookie = (await cookies()).get(COOKIE_TAHAPAN)?.value;
-  return pilihTahapan(dariUrl ?? dariCookie);
+  return pilihDariDaftar(await semuaTahapan(), dariUrl ?? dariCookie);
 }
 
 export async function ipPermintaan() {

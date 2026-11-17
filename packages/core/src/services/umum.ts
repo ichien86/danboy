@@ -1,5 +1,5 @@
 import type { ClientSession } from 'mongoose';
-import { Tahapan, oid, idValid, sambung, type TahapanDoc } from '@danboy/db';
+import { Tahapan, cacheTahapan, oid, idValid, sambung, type TahapanDoc } from '@danboy/db';
 import { Galat, tidakDitemukan } from '../galat';
 import { cakupan, type SessionUser } from '../akses';
 
@@ -18,10 +18,30 @@ export function pastikanId(id: unknown, apa = 'Data'): string {
   return s;
 }
 
-export async function muatTahapan(id: unknown, session?: ClientSession | null): Promise<TahapanDoc> {
+const UMUR_CACHE_TAHAPAN = 5_000;
+
+/** Simpan dokumen tahapan yang baru dibaca ke cache singkat (lihat cacheTahapan). */
+export function ingatTahapan(t: { _id: unknown }) {
+  cacheTahapan.set(String(t._id), { doc: t, waktu: Date.now() });
+}
+
+/**
+ * Dokumen tahapan untuk keperluan baca. Tanpa session memakai cache singkat (±5 detik, dikosongkan setiap ada
+ * perubahan tahapan); dengan session atau `segar` selalu dibaca dari basis data.
+ */
+export async function muatTahapan(id: unknown, session?: ClientSession | null, segar = false): Promise<TahapanDoc> {
   await sambung();
-  const t = await Tahapan.findById(pastikanId(id, 'Tahapan')).session(session ?? null).lean<TahapanDoc>();
+  const kunci = pastikanId(id, 'Tahapan');
+  if (!session && !segar) {
+    const c = cacheTahapan.get(kunci);
+    if (c && Date.now() - c.waktu < UMUR_CACHE_TAHAPAN) {
+      const t = c.doc as TahapanDoc;
+      return { ...t, _id: oid(String(t._id)) } as TahapanDoc;
+    }
+  }
+  const t = await Tahapan.findById(kunci).session(session ?? null).lean<TahapanDoc>();
   if (!t) throw tidakDitemukan('Tahapan');
+  if (!session) ingatTahapan(t);
   return t;
 }
 
@@ -30,7 +50,8 @@ const tgl = (d: Date) =>
 
 /** R10: setiap mutasi data anggaran hanya boleh pada tahapan terbuka. */
 export async function pastikanTahapanTerbuka(tahapanId: unknown, session?: ClientSession | null): Promise<TahapanDoc> {
-  const t = await muatTahapan(tahapanId, session);
+  // selalu dibaca langsung dari basis data, tidak dari cache
+  const t = await muatTahapan(tahapanId, session, true);
   if (t.status !== 'terbuka') {
     const pesan =
       t.status === 'ditutup'

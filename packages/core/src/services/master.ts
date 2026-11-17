@@ -28,13 +28,19 @@ const galatDuplikat = (e: unknown, apa: string) => {
 
 /* ---------- SKPD & sub unit ---------- */
 
-export async function daftarSkpd(user: SessionUser, opsi: { q?: string } = {}) {
+export async function daftarSkpd(user: SessionUser, opsi: { q?: string; tanpaSubUnit?: boolean } = {}) {
   pastikanBoleh(user, 'lihat');
   await sambung();
   const filter: Record<string, unknown> = user.peran === 'skpd' ? { _id: oid(user.skpdId) } : {};
   if (opsi.q) filter.$or = [{ kode: { $regex: escapeRegex(opsi.q) } }, { nama: { $regex: escapeRegex(opsi.q), $options: 'i' } }];
-  const skpd = await Skpd.find(filter).sort({ kode: 1 }).lean();
-  const sub = await SubUnit.find({ skpdId: { $in: skpd.map((s) => s._id) } }).sort({ kode: 1 }).lean();
+  if (opsi.tanpaSubUnit) return ser((await Skpd.find(filter).select('kode nama aktif').sort({ kode: 1 }).lean()).map((s) => ({ ...s, subUnit: [] })));
+  // sub unit dibaca bersamaan dengan SKPD (bukan menunggu), lalu disaring di sini
+  const [skpd, semuaSub] = await Promise.all([
+    Skpd.find(filter).sort({ kode: 1 }).lean(),
+    SubUnit.find(user.peran === 'skpd' ? { skpdId: oid(user.skpdId) } : {}).sort({ kode: 1 }).batchSize(10_000).lean(),
+  ]);
+  const idSkpd = new Set(skpd.map((s) => String(s._id)));
+  const sub = semuaSub.filter((u) => idSkpd.has(String(u.skpdId)));
   return ser(skpd.map((s) => ({ ...s, subUnit: sub.filter((u) => String(u.skpdId) === String(s._id)) })));
 }
 

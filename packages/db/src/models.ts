@@ -164,6 +164,14 @@ const tahapanSchema = new Schema<TahapanDoc>(
 tahapanSchema.index({ tahun: 1, jenis: 1, ke: 1 }, { unique: true });
 tahapanSchema.index({ status: 1, jadwalMulai: 1 });
 aud(tahapanSchema, 'tahapan');
+/**
+ * Cache singkat dokumen tahapan per proses (dibaca berkali-kali dalam satu permintaan: kerangka, halaman, layanan).
+ * Dikosongkan setiap kali ada penulisan ke koleksi tahapan; pemeriksaan "tahapan terbuka" sebelum mengubah data
+ * tidak memakai cache ini.
+ */
+export const cacheTahapan = new Map<string, { doc: unknown; waktu: number }>();
+for (const op of ['save', 'findOneAndUpdate', 'updateOne', 'updateMany', 'deleteOne', 'deleteMany', 'insertMany'] as const)
+  tahapanSchema.post(op as 'save', () => cacheTahapan.clear());
 export const Tahapan = buat('Tahapan', tahapanSchema, 'tahapan');
 
 export interface PaguSumberDanaDoc { _id: Id; tahapanId: Id; sumberDanaId: Id; nilai: number; diubahOleh?: Id; updatedAt: Date; createdAt: Date }

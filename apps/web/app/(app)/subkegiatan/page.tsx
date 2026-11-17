@@ -5,7 +5,7 @@ import { batasUnggahMb, daftarSubkegiatan } from '@danboy/core/services';
 import { TombolImpor } from '@/components/impor';
 import { RiwayatImpor } from '@/components/riwayat-impor';
 import { Rupiah } from '@/components/domain';
-import { FilterSubkegiatan } from '@/components/filter';
+import { FilterSubkegiatan, siapkanFilter } from '@/components/filter';
 import { DrawerSubkegiatan } from '@/components/subkegiatan';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Paginasi, Tabel, TD, TH, TautanTombol } from '@/components/ui';
 import { konteksHalaman, num, TanpaTahapan, type SP } from '@/lib/halaman';
@@ -28,6 +28,7 @@ interface Baris {
 export default async function HalamanSubkegiatan({ searchParams }: { searchParams: SP }) {
   const { user, tahapan, sp } = await konteksHalaman(searchParams);
   if (!tahapan) return <TanpaTahapan superAdmin={user.peran === 'super_admin'} />;
+  siapkanFilter(user); // pilihan saringan dimuat bersamaan dengan data
   const page = num(sp.page, 1);
   const filter = { q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status as 'beda' | undefined, jumlahSd: sp.jumlahSd as 'satu' | undefined, bedaTagging: sp.bedaTagging };
   const r = await daftarSubkegiatan(user, String(tahapan._id), { ...filter, page, limit: 50 });

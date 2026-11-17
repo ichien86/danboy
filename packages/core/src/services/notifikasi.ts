@@ -41,87 +41,74 @@ interface Calon {
  */
 const ATURAN_TAHAPAN = ['R2', 'R3', 'R4', 'R5', 'R6', 'R8'];
 
-/**
- * Hitung ulang notifikasi R2, R3, R4, R5, R8 untuk satu tahapan.
- * Upsert berdasarkan kunciUnik: satu masalah = satu notifikasi terbuka; yang masalahnya hilang ditutup otomatis.
- * Notifikasi yang diabaikan Admin tidak dibuat ulang.
- */
-export async function segarkanNotifikasi(tahapanId: unknown, session?: ClientSession | null) {
-  await sambung();
-  const tId = oid(tahapanId);
-  const tahapan = await Tahapan.findById(tId).session(session ?? null).lean<TahapanDoc>();
-  if (!tahapan) return;
-  const [docs, pagu, sdList, tagging] = await Promise.all([
-    SubkegiatanTahapan.find({ tahapanId: tId })
-      .select('skpdId kodeSubkegiatan namaSubkegiatan pagu alokasi seimbang beda status')
-      .session(session ?? null)
-      .lean<SubkegiatanTahapanDoc[]>(),
-    PaguSumberDana.find({ tahapanId: tId }).session(session ?? null).lean(),
-    SumberDana.find().select('kode nama khusus').session(session ?? null).lean<SumberDanaDoc[]>(),
-    Tagging.find({ tahun: tahapan.tahun }).select('sumberDanaId kodeSubkegiatan').session(session ?? null).lean(),
-  ]);
-  const sdPer = new Map(sdList.map((s) => [String(s._id), s]));
-  const tagged = new Set(tagging.map((t) => `${t.sumberDanaId}|${t.kodeSubkegiatan}`));
-  const calon: Calon[] = [];
-  const terpakai = new Map<string, number>();
-  const t = String(tId);
+/** Aturan per subkegiatan (R3 per sumber dana dihitung terpisah). */
+const ATURAN_SUBKEGIATAN = ['R2', 'R4', 'R5', 'R6', 'R8'];
 
-  for (const d of docs) {
-    const id = String(d._id);
-    const label = `${d.kodeSubkegiatan} ${d.namaSubkegiatan ?? ''}`.trim();
-    if (d.status === 'tidak_ada_di_impor') {
-      calon.push({
-        kunciUnik: `R8:${t}:${id}`,
-        aturan: 'R8',
-        tingkat: 'peringatan',
-        pesan: `${label} tidak ada di impor SIPD terakhir`,
-        tautan: `/subkegiatan?id=${id}`,
-        skpdId: d.skpdId,
-        subkegiatanTahapanId: d._id,
-      });
-      continue;
-    }
-    for (const a of d.alokasi) terpakai.set(String(a.sumberDanaId), (terpakai.get(String(a.sumberDanaId)) ?? 0) + a.nilai);
-    if (d.beda?.ada) {
-      calon.push({
-        kunciUnik: `R2:${t}:${id}`,
-        aturan: 'R2',
-        tingkat: 'peringatan',
-        pesan: `Sumber dana ${label} berbeda dengan SIPD`,
-        tautan: `/perbedaan?id=${id}`,
-        skpdId: d.skpdId,
-        subkegiatanTahapanId: d._id,
-      });
-    }
-    if (!d.seimbang) {
-      const total = d.alokasi.reduce((x, a) => x + a.nilai, 0);
-      calon.push({
-        kunciUnik: `R4:${t}:${id}`,
-        aturan: 'R4',
-        tingkat: 'peringatan',
-        pesan: `Alokasi ${label} belum seimbang: ${formatRupiah(total)} dari pagu ${formatRupiah(d.pagu)}`,
-        tautan: `/subkegiatan?id=${id}`,
-        skpdId: d.skpdId,
-        subkegiatanTahapanId: d._id,
-        detail: { jumlahAlokasi: total, pagu: d.pagu, selisih: d.pagu - total },
-      });
-    }
-    for (const a of d.alokasi) {
-      const sd = sdPer.get(String(a.sumberDanaId));
-      if (!sd?.khusus || a.nilai === 0) continue;
-      if (kandidatKodeNomenklatur(d.kodeSubkegiatan).some((k) => tagged.has(`${a.sumberDanaId}|${k}`))) continue;
-      calon.push({
-        kunciUnik: `R5:${t}:${id}:${a.sumberDanaId}`,
-        aturan: 'R5',
-        tingkat: 'info',
-        pesan: `${label} didanai ${sd.nama} tetapi tidak ada di daftar tagging ${tahapan.tahun}`,
-        tautan: `/subkegiatan?id=${id}`,
-        skpdId: d.skpdId,
-        subkegiatanTahapanId: d._id,
-        sumberDanaId: a.sumberDanaId,
-      });
-    }
+type DocNotif = Pick<SubkegiatanTahapanDoc, '_id' | 'skpdId' | 'kodeSubkegiatan' | 'namaSubkegiatan' | 'pagu' | 'alokasi' | 'seimbang' | 'beda' | 'status'>;
+const PILIH_DOC = 'skpdId kodeSubkegiatan namaSubkegiatan pagu alokasi seimbang beda status';
+
+/** Calon notifikasi R2, R4, R5, R8 satu subkegiatan. Dipakai hitung ulang penuh maupun sebagian agar hasilnya sama. */
+function calonSubkegiatan(d: DocNotif, t: string, tahun: number, sdPer: Map<string, SumberDanaDoc>, tagged: Set<string>): Calon[] {
+  const calon: Calon[] = [];
+  const id = String(d._id);
+  const label = `${d.kodeSubkegiatan} ${d.namaSubkegiatan ?? ''}`.trim();
+  if (d.status === 'tidak_ada_di_impor') {
+    calon.push({
+      kunciUnik: `R8:${t}:${id}`,
+      aturan: 'R8',
+      tingkat: 'peringatan',
+      pesan: `${label} tidak ada di impor SIPD terakhir`,
+      tautan: `/subkegiatan?id=${id}`,
+      skpdId: d.skpdId,
+      subkegiatanTahapanId: d._id,
+    });
+    return calon;
   }
+  if (d.beda?.ada) {
+    calon.push({
+      kunciUnik: `R2:${t}:${id}`,
+      aturan: 'R2',
+      tingkat: 'peringatan',
+      pesan: `Sumber dana ${label} berbeda dengan SIPD`,
+      tautan: `/perbedaan?id=${id}`,
+      skpdId: d.skpdId,
+      subkegiatanTahapanId: d._id,
+    });
+  }
+  if (!d.seimbang) {
+    const total = d.alokasi.reduce((x, a) => x + a.nilai, 0);
+    calon.push({
+      kunciUnik: `R4:${t}:${id}`,
+      aturan: 'R4',
+      tingkat: 'peringatan',
+      pesan: `Alokasi ${label} belum seimbang: ${formatRupiah(total)} dari pagu ${formatRupiah(d.pagu)}`,
+      tautan: `/subkegiatan?id=${id}`,
+      skpdId: d.skpdId,
+      subkegiatanTahapanId: d._id,
+      detail: { jumlahAlokasi: total, pagu: d.pagu, selisih: d.pagu - total },
+    });
+  }
+  for (const a of d.alokasi) {
+    const sd = sdPer.get(String(a.sumberDanaId));
+    if (!sd?.khusus || a.nilai === 0) continue;
+    if (kandidatKodeNomenklatur(d.kodeSubkegiatan).some((k) => tagged.has(`${a.sumberDanaId}|${k}`))) continue;
+    calon.push({
+      kunciUnik: `R5:${t}:${id}:${a.sumberDanaId}`,
+      aturan: 'R5',
+      tingkat: 'info',
+      pesan: `${label} didanai ${sd.nama} tetapi tidak ada di daftar tagging ${tahun}`,
+      tautan: `/subkegiatan?id=${id}`,
+      skpdId: d.skpdId,
+      subkegiatanTahapanId: d._id,
+      sumberDanaId: a.sumberDanaId,
+    });
+  }
+  return calon;
+}
+
+/** Calon notifikasi R3: pagu sumber dana terlampaui (terpakai = alokasi subkegiatan aktif). */
+function calonR3(pagu: { sumberDanaId: unknown; nilai: number }[], terpakai: Map<string, number>, t: string, sdPer: Map<string, SumberDanaDoc>): Calon[] {
+  const calon: Calon[] = [];
   for (const p of pagu) {
     const pakai = terpakai.get(String(p.sumberDanaId)) ?? 0;
     if (pakai <= p.nilai) continue;
@@ -136,17 +123,91 @@ export async function segarkanNotifikasi(tahapanId: unknown, session?: ClientSes
       detail: { pagu: p.nilai, terpakai: pakai, lebih: pakai - p.nilai },
     });
   }
+  return calon;
+}
 
+/**
+ * Hitung ulang notifikasi R2, R3, R4, R5, R8 untuk satu tahapan.
+ * Upsert berdasarkan kunciUnik: satu masalah = satu notifikasi terbuka; yang masalahnya hilang ditutup otomatis.
+ * Notifikasi yang diabaikan Admin tidak dibuat ulang.
+ */
+export async function segarkanNotifikasi(tahapanId: unknown, session?: ClientSession | null) {
+  await sambung();
+  const tId = oid(tahapanId);
+  const tahapan = await Tahapan.findById(tId).session(session ?? null).lean<TahapanDoc>();
+  if (!tahapan) return;
+  const [docs, pagu, sdList, tagging] = await Promise.all([
+    SubkegiatanTahapan.find({ tahapanId: tId }).select(PILIH_DOC).session(session ?? null).lean<DocNotif[]>(),
+    PaguSumberDana.find({ tahapanId: tId }).session(session ?? null).lean(),
+    SumberDana.find().select('kode nama khusus').session(session ?? null).lean<SumberDanaDoc[]>(),
+    Tagging.find({ tahun: tahapan.tahun }).select('sumberDanaId kodeSubkegiatan').session(session ?? null).lean(),
+  ]);
+  const sdPer = new Map(sdList.map((s) => [String(s._id), s]));
+  const tagged = new Set(tagging.map((x) => `${x.sumberDanaId}|${x.kodeSubkegiatan}`));
+  const t = String(tId);
+  const calon: Calon[] = [];
+  const terpakai = new Map<string, number>();
+  for (const d of docs) {
+    calon.push(...calonSubkegiatan(d, t, tahapan.tahun, sdPer, tagged));
+    if (d.status === 'tidak_ada_di_impor') continue;
+    for (const a of d.alokasi) terpakai.set(String(a.sumberDanaId), (terpakai.get(String(a.sumberDanaId)) ?? 0) + a.nilai);
+  }
+  calon.push(...calonR3(pagu, terpakai, t, sdPer));
   await terapkanCalon(calon, { tahapanId: tId, aturan: ATURAN_TAHAPAN }, session);
+}
+
+/**
+ * Hitung ulang sebagian, sesudah perubahan kecil (ubah alokasi, ubah pagu, tambah/hapus subkegiatan, isi pagu
+ * sumber dana): hanya notifikasi milik subkegiatan yang disebut (R2, R4, R5, R8) dan pagu sumber dana yang
+ * tersentuh (R3). Hasilnya sama dengan hitung ulang penuh, tetapi tidak membaca seluruh subkegiatan tahapan.
+ * Sumber dana yang dipakai subkegiatan yang disebut otomatis ikut diperiksa R3-nya.
+ */
+export async function segarkanNotifikasiSebagian(tahapanId: unknown, opsi: { subkegiatanIds?: unknown[]; sumberDanaIds?: unknown[] }) {
+  await sambung();
+  const tId = oid(tahapanId);
+  const subIds = [...new Set((opsi.subkegiatanIds ?? []).map(String))].map(oid);
+  const [tahapan, docs, sdList] = await Promise.all([
+    Tahapan.findById(tId).select('tahun').lean<TahapanDoc>(),
+    subIds.length ? SubkegiatanTahapan.find({ _id: { $in: subIds }, tahapanId: tId }).select(PILIH_DOC).lean<DocNotif[]>() : Promise.resolve([] as DocNotif[]),
+    SumberDana.find().select('kode nama khusus').lean<SumberDanaDoc[]>(),
+  ]);
+  if (!tahapan) return;
+  const sdIds = [...new Set([...(opsi.sumberDanaIds ?? []).map(String), ...docs.flatMap((d) => d.alokasi.map((a) => String(a.sumberDanaId)))])].map(oid);
+  const kode = [...new Set(docs.flatMap((d) => kandidatKodeNomenklatur(d.kodeSubkegiatan)))];
+  const [tagging, pagu, pakai] = await Promise.all([
+    kode.length ? Tagging.find({ tahun: tahapan.tahun, kodeSubkegiatan: { $in: kode } }).select('sumberDanaId kodeSubkegiatan').lean() : Promise.resolve([]),
+    sdIds.length ? PaguSumberDana.find({ tahapanId: tId, sumberDanaId: { $in: sdIds } }).lean() : Promise.resolve([]),
+    sdIds.length
+      ? SubkegiatanTahapan.aggregate<{ _id: unknown; nilai: number }>([
+          { $match: { tahapanId: tId, status: 'aktif', 'alokasi.sumberDanaId': { $in: sdIds } } },
+          { $unwind: '$alokasi' },
+          { $match: { 'alokasi.sumberDanaId': { $in: sdIds } } },
+          { $group: { _id: '$alokasi.sumberDanaId', nilai: { $sum: '$alokasi.nilai' } } },
+        ])
+      : Promise.resolve([]),
+  ]);
+  const sdPer = new Map(sdList.map((s) => [String(s._id), s]));
+  const tagged = new Set(tagging.map((x) => `${x.sumberDanaId}|${x.kodeSubkegiatan}`));
+  const t = String(tId);
+  const terpakai = new Map(pakai.map((p) => [String(p._id), p.nilai]));
+  await Promise.all([
+    subIds.length &&
+      terapkanCalon(
+        docs.flatMap((d) => calonSubkegiatan(d, t, tahapan.tahun, sdPer, tagged)),
+        { tahapanId: tId, aturan: ATURAN_SUBKEGIATAN, filter: { subkegiatanTahapanId: { $in: subIds } } },
+      ),
+    sdIds.length && terapkanCalon(calonR3(pagu, terpakai, t, sdPer), { tahapanId: tId, aturan: ['R3'], filter: { sumberDanaId: { $in: sdIds } } }),
+  ]);
 }
 
 /** Upsert calon notifikasi dan tutup notifikasi terbuka dalam lingkup yang tidak lagi bermasalah. */
 export async function terapkanCalon(
   calon: Calon[],
-  lingkup: { tahapanId?: unknown; aturan: string[]; batchId?: unknown },
+  lingkup: { tahapanId?: unknown; aturan: string[]; batchId?: unknown; filter?: Record<string, unknown> },
   session?: ClientSession | null,
 ) {
-  const filterLingkup: Record<string, unknown> = { aturan: { $in: lingkup.aturan } };
+  // lingkup.filter mempersempit notifikasi yang boleh ditutup (hitung ulang sebagian)
+  const filterLingkup: Record<string, unknown> = { ...lingkup.filter, aturan: { $in: lingkup.aturan } };
   if (lingkup.tahapanId) filterLingkup.tahapanId = oid(lingkup.tahapanId);
   if (lingkup.batchId) filterLingkup.batchId = oid(lingkup.batchId);
   const diabaikan = new Set(

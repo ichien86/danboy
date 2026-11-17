@@ -43,6 +43,19 @@ const ubahCsv = (fn: (baris: string[]) => string[]) => {
   return Buffer.from([h, ...fn(b)].join('\n'));
 };
 
+/**
+ * Hitung ulang notifikasi sebagian (sesudah perubahan kecil) harus sama dengan hitung ulang penuh:
+ * notifikasi terbuka sebelum dan sesudah segarkanNotifikasi penuh tidak boleh berbeda.
+ */
+async function cekSamaDenganPenuh(tId: string) {
+  const ambil = async () =>
+    (await Notifikasi.find({ tahapanId: tId, status: 'terbuka' }).select('kunciUnik pesan').lean()).map((n) => `${n.kunciUnik}|${n.pesan}`).sort();
+  const sebelum = await ambil();
+  await svc.segarkanNotifikasi(tId);
+  expect(await ambil()).toEqual(sebelum);
+  return sebelum;
+}
+
 beforeAll(async () => {
   rs = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } });
   process.env.MONGODB_URI = rs.getUri('danboy_uji');
@@ -238,6 +251,7 @@ describe('alur impor end-to-end (service + model)', () => {
     expect(r.peringatan[0]).toMatchObject({ sumberDana: 'Dana Alokasi Umum (DAU)' });
     expect(await Notifikasi.countDocuments({ aturan: 'R4', status: 'terbuka' })).toBe(1);
     expect(await Notifikasi.countDocuments({ aturan: 'R3', status: 'terbuka' })).toBe(1);
+    await cekSamaDenganPenuh(tahapanId);
     await expect(
       svc.ubahAlokasi(admin, String(d._id), { updatedAt: new Date(d.updatedAt).toISOString(), alokasi: [] }),
     ).rejects.toMatchObject({ kode: 'DATA_BERUBAH' });
@@ -483,8 +497,11 @@ describe('alur impor end-to-end (service + model)', () => {
     const { Nomenklatur, SubUnit } = await import('@danboy/db');
     const t = (await Tahapan.findOne({ status: 'terbuka' }).sort({ _id: -1 }).lean())!;
     const tid = String(t._id);
-    const subUnit = (await SubUnit.find().sort({ kode: 1 }).lean())[0];
     const bidang = (await svc.daftarBidangUrusan(admin))[0];
+    const kode = `${bidang.kode}.01.2.02.0001`;
+    // sub unit yang belum memiliki subkegiatan ini (tidak menghapus data langsung agar notifikasi tetap konsisten)
+    const adaDi = (await svc.calonSubkegiatan(admin, tid, { kode })).sudahAda;
+    const subUnit = (await SubUnit.find().sort({ kode: 1 }).lean()).find((u) => !adaDi.includes(String(u._id)))!;
     expect(bidang.kode).not.toMatch(/^X/);
     expect(await Nomenklatur.exists({ kode: bidang.kode, jenis: 'bidang' })).toBeTruthy();
 
@@ -503,8 +520,6 @@ describe('alur impor end-to-end (service + model)', () => {
     await expect(svc.tambahSubkegiatan(admin, tid, { ...masukan, kodeBidang: '9.99' })).rejects.toMatchObject({ http: 400 });
     await expect(svc.tambahSubkegiatan(admin, tid, { ...masukan, kodeNomenklatur: '9.99.99.2.01.0001' })).rejects.toMatchObject({ http: 400 });
 
-    const kode = `${bidang.kode}.01.2.02.0001`;
-    await SubkegiatanTahapan.deleteMany({ tahapanId: t._id, subUnitId: subUnit._id, kodeSubkegiatan: kode });
     const r = await svc.tambahSubkegiatan(admin, tid, masukan);
     expect(r.dokumen).toMatchObject({ kodeSubkegiatan: kode, namaSubkegiatan: 'Penyediaan Gaji dan Tunjangan ASN', pagu: 5_000_000, seimbang: false, status: 'aktif' });
     expect(String(r.dokumen.skpdId)).toBe(String(subUnit.skpdId));
@@ -526,6 +541,14 @@ describe('alur impor end-to-end (service + model)', () => {
     expect(u.dokumen).toMatchObject({ pagu: 9_000_000, seimbang: false, alokasi: [{ nilai: 7_000_000 }] });
     await expect(svc.ubahPaguSubkegiatan(admin, String(r2.dokumen._id), { updatedAt: String(r2.dokumen.updatedAt), pagu: 1 })).rejects.toMatchObject({ kode: 'DATA_BERUBAH' });
     expect(await Notifikasi.countDocuments({ aturan: 'R4', status: 'terbuka', subkegiatanTahapanId: r2.dokumen._id })).toBe(1);
+    await cekSamaDenganPenuh(tid);
+    // pagu sumber dana diisi kecil -> R3 muncul; dikembalikan -> R3 hilang; keduanya sama dengan hitung penuh
+    const paguLama = (await svc.daftarPaguSumberDana(admin, tid)).find((x) => x.sumberDanaId === String(sg._id))?.nilai ?? null;
+    await svc.simpanPaguSumberDana(admin, tid, [{ sumberDanaId: String(sg._id), nilai: 1 }]);
+    expect(await Notifikasi.countDocuments({ aturan: 'R3', status: 'terbuka', sumberDanaId: sg._id })).toBe(1);
+    await cekSamaDenganPenuh(tid);
+    await svc.simpanPaguSumberDana(admin, tid, [{ sumberDanaId: String(sg._id), nilai: paguLama }]);
+    await cekSamaDenganPenuh(tid);
 
     // hapus: hanya Admin; tercatat di log audit; notifikasinya tertutup
     await expect(svc.hapusSubkegiatan(skpd, String(r.dokumen._id))).rejects.toMatchObject({ http: 403 });
@@ -535,5 +558,6 @@ describe('alur impor end-to-end (service + model)', () => {
     expect(await LogAudit.countDocuments({ aksi: 'hapus', koleksi: 'subkegiatanTahapan', dokumenId: { $in: [r.dokumen._id, r2.dokumen._id] } })).toBe(2);
     expect(await Notifikasi.countDocuments({ status: 'terbuka', subkegiatanTahapanId: { $in: [r.dokumen._id, r2.dokumen._id] } })).toBe(0);
     await expect(svc.hapusSubkegiatan(admin, String(r.dokumen._id))).rejects.toMatchObject({ http: 404 });
+    await cekSamaDenganPenuh(tid);
   });
 });

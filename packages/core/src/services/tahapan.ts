@@ -16,7 +16,7 @@ import { Galat, tidakDitemukan } from '../galat';
 import { cariSumberSalinan, namaTahapan, urutanTahapan } from '../tahapan';
 import { tambahJob } from './antrean';
 import { segarkanNotifikasi } from './notifikasi';
-import { muatTahapan, pastikanId } from './umum';
+import { ingatTahapan, muatTahapan, pastikanId } from './umum';
 
 const ser = <T>(x: T): T => JSON.parse(JSON.stringify(x));
 
@@ -53,7 +53,18 @@ export async function ubahTahun(user: SessionUser, id: string, status: 'aktif' |
 export async function daftarTahapan(tahun?: number) {
   await sambung();
   const filter = tahun ? { tahun } : {};
-  return ser(await Tahapan.find(filter).sort({ tahun: -1, urutan: 1 }).lean<TahapanDoc[]>());
+  const data = await Tahapan.find(filter).sort({ tahun: -1, urutan: 1 }).lean<TahapanDoc[]>();
+  data.forEach(ingatTahapan);
+  return ser(data);
+}
+
+/**
+ * Pilih tahapan aktif dari daftar yang sudah dimuat (tanpa permintaan tambahan ke basis data):
+ * id yang diminta, lalu tahapan terbuka terbaru, lalu tahapan terbaru. Sama dengan pilihTahapan.
+ */
+export function pilihDariDaftar<T extends { _id: unknown; tahun: number; urutan: number; status: string }>(daftar: T[], id?: string | null): T | null {
+  const urut = [...daftar].sort((a, b) => b.tahun - a.tahun || b.urutan - a.urutan);
+  return (id ? daftar.find((t) => String(t._id) === id) : undefined) ?? urut.find((t) => t.status === 'terbuka') ?? urut[0] ?? null;
 }
 
 /** Pilih tahapan aktif: dari parameter, lalu tahapan terbuka terbaru, lalu tahapan terbaru. */

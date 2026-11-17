@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { boleh, LABEL_PERAN } from '@danboy/core';
-import { daftarTahapan, hitungNotifikasiTerbuka } from '@danboy/core/services';
-import { tahapanAktif, wajibSesi } from '@/lib/sesi';
+import { hitungNotifikasiTerbuka } from '@danboy/core/services';
+import { semuaTahapan, tahapanAktif, wajibSesi } from '@/lib/sesi';
 import { LoncengNotifikasi, PemilihTahapan, PencarianCepat, TombolTema } from '@/components/klien';
 import { Kerangka } from './kerangka';
 
@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
 
 
 export default async function LayoutAplikasi({ children }: { children: React.ReactNode }) {
-  const user = await wajibSesi();
-  const [semua, aktif] = await Promise.all([daftarTahapan(), tahapanAktif()]);
+  // sesi dan daftar tahapan dibaca bersamaan; halaman memakai hasil yang sama (cache per permintaan)
+  const [user, semua, aktif] = await Promise.all([wajibSesi(), semuaTahapan(), tahapanAktif()]);
   const notif = aktif ? await hitungNotifikasiTerbuka(user, String(aktif._id)) : { total: 0, kritis: 0 };
   const opsi = semua.map((t) => ({ _id: String(t._id), nama: t.nama, tahun: t.tahun, status: t.status }));
   const menu = {

@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { boleh } from '@danboy/core';
 import { daftarPerbedaan } from '@danboy/core/services';
 import { Rupiah } from '@/components/domain';
-import { FilterSubkegiatan } from '@/components/filter';
+import { FilterSubkegiatan, siapkanFilter } from '@/components/filter';
 import { DrawerSubkegiatan } from '@/components/subkegiatan';
 import { Kartu, KepalaHalaman, Kosong, Paginasi, Peringatan, cx } from '@/components/ui';
 import { konteksHalaman, num, TanpaTahapan, type SP } from '@/lib/halaman';
@@ -26,6 +26,7 @@ export default async function Perbedaan({ searchParams }: { searchParams: SP }) 
   const { user, tahapan, sp } = await konteksHalaman(searchParams);
   if (!boleh(user, 'lihat_perbedaan')) redirect('/dasbor');
   if (!tahapan) return <TanpaTahapan superAdmin={user.peran === 'super_admin'} />;
+  siapkanFilter(user); // pilihan saringan dimuat bersamaan dengan data
   const page = num(sp.page, 1);
   const filter = { q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana };
   const r = await daftarPerbedaan(user, String(tahapan._id), { ...filter, page, limit: 50 });

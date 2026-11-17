@@ -1,6 +1,17 @@
+import { cache } from 'react';
 import { daftarSkpd, daftarSumberDana } from '@danboy/core/services';
 import type { SessionUser } from '@danboy/core';
 import { Masukan, Pilihan, Tombol, TautanTombol } from './ui';
+
+/** Pilihan SKPD dan sumber dana untuk saringan; sekali per permintaan. */
+const dataFilter = cache((user: SessionUser) =>
+  Promise.all([user.peran === 'skpd' ? Promise.resolve([]) : daftarSkpd(user, { tanpaSubUnit: true }), daftarSumberDana(user)]),
+);
+
+/** Panggil di awal halaman agar pilihan saringan dimuat bersamaan dengan data utama, bukan sesudahnya. */
+export function siapkanFilter(user: SessionUser) {
+  void dataFilter(user).catch(() => undefined);
+}
 
 /** Form saring GET (tanpa JavaScript) untuk daftar subkegiatan. */
 export async function FilterSubkegiatan({
@@ -17,7 +28,7 @@ export async function FilterSubkegiatan({
   /** Tampilkan kotak centang: lebih dari satu sumber dana, beda dengan tagging. */
   jumlahSd?: boolean;
 }) {
-  const [skpd, sd] = await Promise.all([user.peran === 'skpd' ? [] : daftarSkpd(user), daftarSumberDana(user)]);
+  const [skpd, sd] = await dataFilter(user);
   return (
     <form method="get" action={dasar} className="mb-3 grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
       <Masukan name="q" data-cari defaultValue={sp.q} placeholder="Kode atau nama subkegiatan  (tekan /)" aria-label="Cari" className="lg:w-64" />
