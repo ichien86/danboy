@@ -24,7 +24,6 @@ interface Ringkasan {
   jumlah?: number;
   sesuai?: number;
   tidakSesuai?: number;
-  rincianSalah?: number;
   totalPaguSipd?: number;
   totalPaguAplikasi?: number;
   perStatus?: Record<StatusVerifikasi, number>;
@@ -52,7 +51,6 @@ interface Hasil {
     namaSkpd: string;
     namaSubUnit: string;
     baris: { kodeSumberDana: string; nilaiAplikasi: number; nilaiSipd: number; selisih: number }[];
-    rincianSalah: { kodeRekening: string; kodeSumberDana: string; namaSumberDana?: string; namaPaket?: string; paket?: string; pagu: number }[];
   };
 }
 
@@ -155,7 +153,7 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
               <Statistik label="Subkegiatan diperiksa" nilai={rk.jumlah ?? 0} sub={`${(rk.barisOk ?? 0).toLocaleString('id-ID')} baris SIPD${rk.barisDitahan ? ` · ${rk.barisDitahan} baris tidak valid` : ''}`} />
               <Statistik label="Sesuai" nilai={rk.sesuai ?? 0} nada="aman" />
-              <Statistik label="Belum sesuai" nilai={rk.tidakSesuai ?? 0} sub={`${rk.rincianSalah ?? 0} baris rekening salah sumber dana`} nada={rk.tidakSesuai ? 'bahaya' : 'aman'} />
+              <Statistik label="Belum sesuai" nilai={rk.tidakSesuai ?? 0} nada={rk.tidakSesuai ? 'bahaya' : 'aman'} />
               <Statistik
                 label="Total pagu SIPD vs aplikasi"
                 nilai={<Rupiah nilai={rk.totalPaguSipd ?? 0} juta />}
@@ -336,24 +334,6 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
                               ))}
                             </tbody>
                           </table>
-                          {h.verifikasi.rincianSalah.length > 0 && (
-                            <details className="mt-2 rounded-md border border-garis px-3 py-2 text-sm">
-                              <summary className="cursor-pointer font-medium text-bahaya">
-                                {h.verifikasi.rincianSalah.length} baris rekening di SIPD memakai sumber dana yang tidak dialokasikan
-                              </summary>
-                              <ul className="mt-2 space-y-1">
-                                {h.verifikasi.rincianSalah.map((x, i) => (
-                                  <li key={i} className="flex flex-wrap justify-between gap-2">
-                                    <span>
-                                      <span className="font-mono text-xs">{x.kodeRekening}</span> {x.namaPaket || x.paket || ''}
-                                      <span className="block text-xs text-redup">{x.namaSumberDana ?? nama[x.kodeSumberDana] ?? x.kodeSumberDana}</span>
-                                    </span>
-                                    <Rupiah nilai={x.pagu} />
-                                  </li>
-                                ))}
-                              </ul>
-                            </details>
-                          )}
                         </div>
                       </li>
                     );

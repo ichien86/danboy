@@ -115,14 +115,6 @@ export async function prosesVerifikasi(batchId: string) {
       totalPaguSipd += r.PAGU;
       e.alokasi.push({ kode: r['KODE SUMBER DANA'], nilai: r.PAGU });
       if (!namaSdSipd.has(r['KODE SUMBER DANA'])) namaSdSipd.set(r['KODE SUMBER DANA'], r['NAMA SUMBER DANA']);
-      e.rincian!.push({
-        kodeRekening: r['KODE REKENING'],
-        kodeSumberDana: r['KODE SUMBER DANA'],
-        namaSumberDana: r['NAMA SUMBER DANA'],
-        paket: teks(data['PAKET'] ?? data['KODE PAKET']) || undefined,
-        namaPaket: teks(data['NAMA PAKET']) || undefined,
-        pagu: r.PAGU,
-      });
       if (barisTotal % 2000 === 0) await set({ progres: Math.min(60, 5 + Math.floor(barisTotal / 250)), 'ringkasan.barisDibaca': barisTotal });
     }
     if (barisTotal === 0) throw new Galat('FORMAT_FILE', 'File tidak berisi baris data');
@@ -181,7 +173,6 @@ export async function prosesVerifikasi(batchId: string) {
         kodeSubUnit: h.kodeSubUnit,
         namaSubUnit: h.namaSubUnit,
         baris: h.baris,
-        rincianSalah: h.rincianSalah,
       },
       };
     });
@@ -385,7 +376,7 @@ async function segarkanNotifVS(b: { _id: unknown; tahapanId: { _id: unknown } },
   );
 }
 
-/** Excel untuk dikirim ke SKPD: ringkasan, selisih per sumber dana, dan baris rekening yang salah sumber dana. */
+/** Excel untuk dikirim ke SKPD: ringkasan dan selisih per sumber dana. */
 export async function eksporVerifikasi(user: SessionUser, batchId: string): Promise<{ namaFile: string; isi: Buffer }> {
   pastikanBoleh(user, 'ekspor');
   const b = await muatBatchVerifikasi(batchId);
@@ -399,16 +390,12 @@ export async function eksporVerifikasi(user: SessionUser, batchId: string): Prom
     .sort({ 'verifikasi.kodeSkpd': 1, 'verifikasi.urut': 1, kodeSubkegiatan: 1 })
     .lean();
   const barisSd: Record<string, unknown>[] = [];
-  const barisRincian: Record<string, unknown>[] = [];
   for (const d of docs) {
-    const v = d.verifikasi as unknown as { kodeSkpd: string; namaSkpd: string; kodeSubUnit: string; namaSubUnit: string; baris: HasilVerifikasi['baris']; rincianSalah: HasilVerifikasi['rincianSalah'] };
+    const v = d.verifikasi as unknown as { kodeSkpd: string; namaSkpd: string; kodeSubUnit: string; namaSubUnit: string; baris: HasilVerifikasi['baris'] };
     const dasar = { skpd: v.namaSkpd, subUnit: v.namaSubUnit, kodeSubkegiatan: d.kodeSubkegiatan, namaSubkegiatan: d.namaSubkegiatan, status: LABEL_STATUS_VERIFIKASI[d.aturan as StatusVerifikasi] };
     for (const x of v.baris) {
       if (x.selisih === 0) continue;
       barisSd.push({ ...dasar, kodeSumberDana: x.kodeSumberDana, sumberDana: nama[x.kodeSumberDana] ?? x.kodeSumberDana, nilaiAplikasi: x.nilaiAplikasi, nilaiSipd: x.nilaiSipd, selisih: x.selisih });
-    }
-    for (const r of v.rincianSalah) {
-      barisRincian.push({ ...dasar, kodeRekening: r.kodeRekening, paket: r.namaPaket || r.paket || '', kodeSumberDana: r.kodeSumberDana, sumberDana: r.namaSumberDana ?? nama[r.kodeSumberDana] ?? '', pagu: r.pagu });
     }
   }
   const t = b.tahapanId as unknown as { nama: string };
@@ -451,21 +438,6 @@ export async function eksporVerifikasi(user: SessionUser, batchId: string): Prom
         { header: 'Selisih (SIPD − aplikasi)', key: 'selisih', rupiah: true, width: 22 },
       ],
       baris: barisSd,
-    },
-    {
-      nama: 'Rekening salah sumber dana',
-      judul,
-      kolom: [
-        { header: 'SKPD', key: 'skpd', width: 36 },
-        { header: 'Sub Unit', key: 'subUnit', width: 36 },
-        { header: 'Kode Subkegiatan', key: 'kodeSubkegiatan', width: 20 },
-        { header: 'Nama Subkegiatan', key: 'namaSubkegiatan', width: 48 },
-        { header: 'Kode Rekening', key: 'kodeRekening', width: 22 },
-        { header: 'Paket', key: 'paket', width: 30 },
-        { header: 'Sumber Dana di SIPD', key: 'sumberDana', width: 34 },
-        { header: 'Pagu', key: 'pagu', rupiah: true, width: 18 },
-      ],
-      baris: barisRincian,
     },
   ]);
   return { namaFile: `danboy-verifikasi-sipd-${String(b._id).slice(-6)}.xlsx`, isi };

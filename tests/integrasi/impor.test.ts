@@ -322,9 +322,11 @@ describe('alur impor end-to-end (service + model)', () => {
 
     const r = await svc.hasilVerifikasi(admin, String(b._id), { status: 'sumber_dana_berbeda' });
     expect(r.data).toHaveLength(1);
-    const v = r.data[0].verifikasi as unknown as { rincianSalah: { kodeSumberDana: string; pagu: number }[]; baris: { kodeSumberDana: string; selisih: number }[] };
+    const v = r.data[0].verifikasi as unknown as { rincianSalah?: unknown; baris: { kodeSumberDana: string; selisih: number }[] };
     expect(r.data[0].kodeSubkegiatan).toBe('1.01.02.2.01.0025');
-    expect(v.rincianSalah).toEqual([expect.objectContaining({ kodeSumberDana: '1.2.01.01.01', pagu: 350_000_000 })]);
+    // baris rekening tidak disimpan; cukup selisih per sumber dana
+    expect(v.rincianSalah).toBeUndefined();
+    expect(v.baris.some((x) => x.kodeSumberDana === '1.2.01.01.01' && x.selisih === 350_000_000)).toBe(true);
     const nilai = await svc.hasilVerifikasi(admin, String(b._id), { status: 'nilai_berbeda' });
     expect((nilai.data[0].verifikasi as unknown as { baris: { selisih: number }[] }).baris.map((x) => x.selisih)).toContain(20_000_000);
 

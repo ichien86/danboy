@@ -16,7 +16,7 @@ interface Batch {
   createdAt: string;
   galat?: string | null;
   olehId?: { nama: string };
-  ringkasan: { jumlah?: number; sesuai?: number; tidakSesuai?: number; rincianSalah?: number; perSkpd?: { tidakSesuai: number; jumlah: number }[] };
+  ringkasan: { jumlah?: number; sesuai?: number; tidakSesuai?: number; perSkpd?: { tidakSesuai: number; jumlah: number }[] };
 }
 
 export default async function Verifikasi({ searchParams }: { searchParams: SP }) {

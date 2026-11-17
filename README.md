@@ -145,8 +145,7 @@ di `TUJUAN_CADANGAN`. **Pemantauan:** `GET /api/kesehatan` (MongoDB, Redis, antr
 5. **Subkegiatan / Matriks**: lihat dan ubah alokasi (Admin). Ctrl+K untuk mencari subkegiatan.
 6. **Verifikasi SIPD**: unggah ekspor rincian APBD dari SIPD untuk mengecek apakah sumber dana yang diinput SKPD di SIPD sudah sama
    dengan alokasi di aplikasi (aplikasi = acuan). Tidak mengubah data apa pun dan boleh terhadap tahapan yang sudah ditutup.
-   Hasil per subkegiatan: *sesuai*, *nilai per sumber dana berbeda*, *sumber dana berbeda* (beserta baris rekening SIPD yang memakai
-   sumber dana yang tidak dialokasikan), *ada di aplikasi tapi tidak di SIPD*, dan *ada di SIPD tapi tidak di aplikasi*.
+   Hasil per subkegiatan: *sesuai*, *nilai per sumber dana berbeda*, *sumber dana berbeda*, *ada di aplikasi tapi tidak di SIPD*, dan *ada di SIPD tapi tidak di aplikasi*.
    Setiap SKPD yang belum sesuai mendapat notifikasi `VS` yang membuka daftar subkegiatan miliknya yang belum sama sumber dananya.
    SKPD mencentang **"Sudah disesuaikan di SIPD"** setelah memperbaiki SIPD; daftar "belum" berkurang, jumlah di notifikasi ikut
    berkurang, dan notifikasi tertutup sendiri bila semua sudah dicentang. Centang hanya pengingat (disimpan di MongoDB pada
