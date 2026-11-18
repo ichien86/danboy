@@ -3,15 +3,21 @@
 import { AuthError } from 'next-auth';
 import { signIn } from '@/auth';
 
-export async function masuk(_: { galat: string }, fd: FormData): Promise<{ galat: string }> {
+/**
+ * Masuk tanpa redirect di dalam server action: action hanya memasang cookie sesi lalu mengembalikan tujuan,
+ * dan browser pindah halaman sendiri (muat penuh). Redirect di dalam action rapuh di hosting serverless
+ * (mis. Netlify) dan bisa berujung "An unexpected response was received from the server".
+ */
+export async function masuk(_: { galat: string; ke?: string }, fd: FormData): Promise<{ galat: string; ke?: string }> {
   const lanjut = String(fd.get('lanjut') ?? '/dasbor');
+  const ke = lanjut.startsWith('/') && !lanjut.startsWith('//') ? lanjut : '/dasbor';
   try {
     await signIn('credentials', {
       username: String(fd.get('username') ?? ''),
       password: String(fd.get('password') ?? ''),
-      redirectTo: lanjut.startsWith('/') && !lanjut.startsWith('//') ? lanjut : '/dasbor',
+      redirect: false,
     });
-    return { galat: '' };
+    return { galat: '', ke };
   } catch (e) {
     if (e instanceof AuthError) {
       const kode = (e as AuthError & { code?: string }).code ?? '';

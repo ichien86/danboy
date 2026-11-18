@@ -23,7 +23,8 @@ export default auth((req) => {
   }
 
   if (PUBLIK.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
-    if (pathname === '/login' && req.auth) return NextResponse.redirect(new URL('/dasbor', req.url));
+    // hanya saat membuka halaman; kiriman form login (server action, POST) tidak dibelokkan walau masih ada sesi lama
+    if (pathname === '/login' && req.method === 'GET' && req.auth) return NextResponse.redirect(new URL('/dasbor', req.url));
     return NextResponse.next();
   }
   if (!req.auth) {

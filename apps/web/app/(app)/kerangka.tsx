@@ -74,7 +74,18 @@ function Navigasi({ menu, pengguna }: { menu: Menu; pengguna: { nama: string; pe
       <div className="border-t border-garis p-3">
         <p className="truncate text-sm font-medium">{pengguna.nama}</p>
         <p className="text-xs text-redup">{pengguna.peran}</p>
-        <form action={keluar} className="mt-2">
+        <form
+          className="mt-2"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            try {
+              await keluar();
+            } catch {
+              /* tetap pindah ke login; middleware akan meminta login lagi bila sesi masih ada */
+            }
+            window.location.assign('/login');
+          }}
+        >
           <button type="submit" className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-redup hover:bg-latar hover:text-teks">
             <LogOut className="size-4" aria-hidden />
             Keluar

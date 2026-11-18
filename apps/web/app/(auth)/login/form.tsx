@@ -1,17 +1,38 @@
 'use client';
 
 import { Eye, EyeOff } from 'lucide-react';
-import { useActionState, useState } from 'react';
+import { useState } from 'react';
 import { Bidang, Masukan, Peringatan, Tombol } from '@/components/ui';
 import { masuk } from './aksi';
 
 export function FormMasuk({ lanjut }: { lanjut: string }) {
-  const [state, aksi, memuat] = useActionState(masuk, { galat: '' });
+  const [galat, setGalat] = useState('');
+  const [memuat, setMemuat] = useState(false);
   const [lihat, setLihat] = useState(false);
   return (
-    <form action={aksi} className="space-y-4">
+    <form
+      className="space-y-4"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        setGalat('');
+        setMemuat(true);
+        try {
+          const h = await masuk({ galat: '' }, fd);
+          if (h.ke) {
+            // muat penuh: sesi baru langsung terbaca di semua halaman (termasuk wajib ganti sandi)
+            window.location.assign(h.ke);
+            return;
+          }
+          setGalat(h.galat);
+        } catch {
+          setGalat('Gagal terhubung ke server. Muat ulang halaman (Ctrl+Shift+R) lalu coba lagi.');
+        }
+        setMemuat(false);
+      }}
+    >
       <input type="hidden" name="lanjut" value={lanjut} />
-      {state.galat && <Peringatan nada="bahaya">{state.galat}</Peringatan>}
+      {galat && <Peringatan nada="bahaya">{galat}</Peringatan>}
       <Bidang label="Username" htmlFor="username">
         <Masukan id="username" name="username" autoComplete="username" required autoFocus />
       </Bidang>
