@@ -650,4 +650,18 @@ describe('alur impor end-to-end (service + model)', () => {
     expect((log2.sebelum as { beda?: { ada?: boolean } }).beda?.ada).toBe(true);
     await svc.segarkanNotifikasi(String(t._id));
   });
+
+  it('tagging dari master: pencarian subkegiatan, X.XX untuk semua bidang atau satu bidang', async () => {
+    const cari = await svc.cariSubkegiatanMaster(admin, 'gaji');
+    expect(cari.data).toEqual([{ kode: 'X.XX.01.2.02.0001', nama: expect.any(String), templat: true }]);
+    expect((await svc.cariSubkegiatanMaster(admin, 'g')).data).toEqual([]);
+    const sd = (await SumberDana.findOne({ khusus: true }).lean())!;
+    const bidang = (await svc.daftarBidangUrusan(admin))[0];
+    const semua = await svc.buatTagging(admin, { tahun: 2031, sumberDanaId: String(sd._id), kodeSubkegiatan: 'X.XX.01.2.02.0001', kategori: '', rincian: 'semua' });
+    const satu = await svc.buatTagging(admin, { tahun: 2031, sumberDanaId: String(sd._id), kodeSubkegiatan: bidang.kode + '.01.2.02.0001', kategori: '', rincian: 'satu' });
+    expect(semua.kodeSubkegiatan).toBe('X.XX.01.2.02.0001');
+    expect(satu.kodeSubkegiatan).toBe(bidang.kode + '.01.2.02.0001');
+    await svc.hapusTagging(admin, String(semua._id));
+    await svc.hapusTagging(admin, String(satu._id));
+  });
 });

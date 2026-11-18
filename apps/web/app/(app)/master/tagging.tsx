@@ -16,12 +16,121 @@ interface Tag {
   satuan?: string;
 }
 
+interface Calon {
+  kode: string;
+  nama: string;
+  templat: boolean;
+}
+
+/**
+ * Pilih subkegiatan dari master nomenklatur. Untuk subkegiatan penunjang (X.XX) tagging boleh berlaku untuk semua
+ * bidang urusan (kode X.XX disimpan apa adanya) atau satu bidang tertentu (X.XX diganti kode bidang).
+ */
+function PilihSubkegiatanMaster({ onKode }: { onKode: (kode: string) => void }) {
+  const [cari, setCari] = useState('');
+  const [hasil, setHasil] = useState<Calon[]>([]);
+  const [mencari, setMencari] = useState(false);
+  const [pilih, setPilih] = useState<Calon | null>(null);
+  const [bidang, setBidang] = useState<{ kode: string; nama: string }[]>([]);
+  const [kodeBidang, setKodeBidang] = useState('');
+
+  useEffect(() => {
+    const q = cari.trim();
+    if (pilih || q.length < 2) {
+      setHasil([]);
+      return;
+    }
+    let batal = false;
+    setMencari(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await api<{ data: Calon[] }>(`/api/nomenklatur/subkegiatan?q=${encodeURIComponent(q)}`);
+        if (!batal) setHasil(r.data);
+      } catch {
+        if (!batal) setHasil([]);
+      } finally {
+        if (!batal) setMencari(false);
+      }
+    }, 300);
+    return () => {
+      batal = true;
+      clearTimeout(t);
+    };
+  }, [cari, pilih]);
+
+  useEffect(() => {
+    if (pilih?.templat && !bidang.length) api<{ kode: string; nama: string }[]>('/api/nomenklatur/bidang').then(setBidang).catch(() => {});
+  }, [pilih, bidang.length]);
+
+  useEffect(() => {
+    if (!pilih) onKode('');
+    else if (pilih.templat && kodeBidang) onKode([kodeBidang, ...pilih.kode.split('.').slice(2)].join('.'));
+    else onKode(pilih.kode);
+  }, [pilih, kodeBidang, onKode]);
+
+  return (
+    <>
+      <Bidang label="Subkegiatan (dari master nomenklatur)" htmlFor="cariSubkegiatan" bantuan={pilih ? undefined : 'Ketik minimal 2 huruf nama atau awal kode, lalu pilih dari daftar.'}>
+        {pilih ? (
+          <div className="flex items-start justify-between gap-3 rounded-md border border-garis bg-latar px-3 py-2 text-sm">
+            <span>
+              <span className="font-mono text-xs text-redup">{pilih.kode}</span>
+              <span className="block">{pilih.nama}</span>
+            </span>
+            <Tombol
+              type="button"
+              kecil
+              varian="hantu"
+              onClick={() => {
+                setPilih(null);
+                setKodeBidang('');
+              }}
+            >
+              Ganti
+            </Tombol>
+          </div>
+        ) : (
+          <>
+            <Masukan id="cariSubkegiatan" value={cari} onChange={(e) => setCari(e.target.value)} placeholder="Nama atau kode subkegiatan" autoComplete="off" />
+            {cari.trim().length >= 2 && (
+              <ul className="mt-1 max-h-60 overflow-y-auto rounded-md border border-garis text-sm">
+                {hasil.map((h) => (
+                  <li key={h.kode} className="border-b border-garis last:border-b-0">
+                    <button type="button" className="block w-full px-3 py-2 text-left hover:bg-latar" onClick={() => setPilih(h)}>
+                      <span className="font-mono text-xs text-redup">{h.kode}</span>
+                      <span className="block">{h.nama}</span>
+                    </button>
+                  </li>
+                ))}
+                {!hasil.length && <li className="px-3 py-2 text-redup">{mencari ? 'Mencari…' : 'Tidak ada subkegiatan yang cocok di master nomenklatur.'}</li>}
+              </ul>
+            )}
+          </>
+        )}
+      </Bidang>
+      {pilih?.templat && (
+        <Bidang label="Berlaku untuk bidang urusan" htmlFor="kodeBidangTag" bantuan="Subkegiatan penunjang (X.XX): pilih semua bidang, atau satu bidang urusan tertentu.">
+          <Pilihan id="kodeBidangTag" value={kodeBidang} onChange={(e) => setKodeBidang(e.target.value)}>
+            <option value="">Semua bidang urusan ({pilih.kode})</option>
+            {bidang.map((b) => (
+              <option key={b.kode} value={b.kode}>
+                {b.kode} {b.nama}
+              </option>
+            ))}
+          </Pilihan>
+        </Bidang>
+      )}
+    </>
+  );
+}
+
 /** Satu koleksi tagging, dua tampilan: dari master sumber dana (sumberDanaId tetap) atau dari nomenklatur (kode tetap). */
 export function FormTagging({ tahun, sumberDanaId, kodeSubkegiatan, awal }: { tahun: number; sumberDanaId?: string; kodeSubkegiatan?: string; awal?: Tag }) {
   const [buka, setBuka] = useState(false);
   const [galat, setGalat] = useState('');
   const [memuat, setMemuat] = useState(false);
   const [sdList, setSdList] = useState<{ _id: string; kode: string; nama: string }[]>([]);
+  const [kodeDipilih, setKodeDipilih] = useState('');
   const toast = useToast();
   const router = useRouter();
   useEffect(() => {
@@ -45,6 +154,7 @@ export function FormTagging({ tahun, sumberDanaId, kodeSubkegiatan, awal }: { ta
           onSubmit={async (e) => {
             e.preventDefault();
             const fd = new FormData(e.currentTarget);
+            if (!awal && !kodeSubkegiatan && !kodeDipilih) return setGalat('Pilih subkegiatan dari master nomenklatur');
             const isi = {
               kategori: String(fd.get('kategori') ?? ''),
               rincian: String(fd.get('rincian') ?? ''),
@@ -58,7 +168,7 @@ export function FormTagging({ tahun, sumberDanaId, kodeSubkegiatan, awal }: { ta
               if (awal) await api(`/api/tagging/${awal._id}`, { method: 'PATCH', body: isi });
               else
                 await api('/api/tagging', {
-                  body: { ...isi, tahun, sumberDanaId: sumberDanaId ?? String(fd.get('sumberDanaId')), kodeSubkegiatan: kodeSubkegiatan ?? String(fd.get('kodeSubkegiatan')).trim() },
+                  body: { ...isi, tahun, sumberDanaId: sumberDanaId ?? String(fd.get('sumberDanaId')), kodeSubkegiatan: kodeSubkegiatan ?? kodeDipilih },
                 });
               toast('Tagging disimpan');
               setBuka(false);
@@ -72,9 +182,7 @@ export function FormTagging({ tahun, sumberDanaId, kodeSubkegiatan, awal }: { ta
         >
           {galat && <Peringatan nada="bahaya">{galat}</Peringatan>}
           {!awal && !kodeSubkegiatan && (
-            <Bidang label="Kode subkegiatan" htmlFor="kodeSubkegiatan">
-              <Masukan id="kodeSubkegiatan" name="kodeSubkegiatan" placeholder="1.01.02.2.01.0001" required />
-            </Bidang>
+            <PilihSubkegiatanMaster onKode={setKodeDipilih} />
           )}
           {!awal && !sumberDanaId && (
             <Bidang label="Sumber dana khusus" htmlFor="sumberDanaId">

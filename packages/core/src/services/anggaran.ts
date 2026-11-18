@@ -380,8 +380,14 @@ export async function calonSubkegiatan(user: SessionUser, tahapanId: string, ops
     ]);
     return ser({ kode, tagging, sudahAda: ada.map((a) => String(a.subUnitId)) });
   }
-  const q = (opsi.q ?? '').trim();
-  if (q.length < 2) return { data: [] };
+  return { data: await cariNomenklaturSubkegiatan(opsi.q) };
+}
+
+/** Pencarian subkegiatan aktif di master nomenklatur (awal kode atau sebagian nama), maks. 30 baris. */
+async function cariNomenklaturSubkegiatan(qMentah?: string) {
+  const q = (qMentah ?? '').trim();
+  if (q.length < 2) return [];
+  await sambung();
   const data = await Nomenklatur.find({
     aktif: true,
     jenis: 'subkegiatan',
@@ -391,7 +397,13 @@ export async function calonSubkegiatan(user: SessionUser, tahapanId: string, ops
     .sort({ kode: 1 })
     .limit(30)
     .lean();
-  return ser({ data: data.map((d) => ({ kode: d.kode, nama: d.nama, templat: kodeX(d.kode) })) });
+  return data.map((d) => ({ kode: d.kode, nama: d.nama, templat: kodeX(d.kode) }));
+}
+
+/** GET /api/nomenklatur/subkegiatan?q= : bahan formulir tagging (pilih subkegiatan dari master). */
+export async function cariSubkegiatanMaster(user: SessionUser, q?: string) {
+  pastikanBoleh(user, 'lihat');
+  return { data: await cariNomenklaturSubkegiatan(q) };
 }
 
 /**
