@@ -4,7 +4,7 @@ import { buatXlsx, type SheetEkspor } from '@danboy/excel';
 import { pastikanBoleh, type SessionUser } from '../akses';
 import { Galat } from '../galat';
 import { totalAlokasi } from '../pembanding';
-import { matriks, rekapSumberDana } from './anggaran';
+import { matriksSemua, rekapSumberDana } from './anggaran';
 import { cakupanDb, muatTahapan, pastikanId } from './umum';
 
 const ser = <T>(x: T): T => JSON.parse(JSON.stringify(x));
@@ -77,10 +77,10 @@ export async function ekspor(
     const { page: _p, limit: _l, ...f } = saringan as Partial<FilterSubkegiatan>;
     void _p, _l;
     const disaring = Object.values(f).some(Boolean);
-    const pertama = await matriks(user, tahapanId, { ...f, page: 1, limit: 200 });
+    // semua baris dalam satu agregasi (dulu: matriks() per 200 baris, masing-masing mengulang kolom, total, dan saringan)
+    const pertama = await matriksSemua(user, tahapanId, f);
     type BarisM = Record<string, unknown> & { alokasi: { sumberDanaId: string; nilai: number }[] };
-    const semua = [...pertama.data] as unknown as BarisM[];
-    for (let p = 2; (p - 1) * 200 < pertama.total; p++) semua.push(...((await matriks(user, tahapanId, { ...f, page: p, limit: 200 })).data as unknown as BarisM[]));
+    const semua = pertama.data as unknown as BarisM[];
     const kolomSd = (pertama.kolom as unknown as { _id: string; kode: string; nama: string }[]).map((k) => ({ header: `${k.nama} (${k.kode})`, key: `sd_${k._id}`, rupiah: true, width: 18 }));
     sheets = [
       {

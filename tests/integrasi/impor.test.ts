@@ -593,4 +593,61 @@ describe('alur impor end-to-end (service + model)', () => {
     expect((b2.ringkasan.rujukanHilang as { sumberDana: { kode: string }[] }).sumberDana.map((x) => x.kode)).toEqual(['9.9.99.99']);
     await svc.batalImpor(admin, String(b2._id));
   });
+
+  it('Ikut SIPD untuk semua: semua yang beda mengikuti SIPD sekaligus; notifikasi R2 tertutup', async () => {
+    const t = (await Tahapan.findOne({ jenis: 'PERGESERAN', status: 'terbuka' }).lean())!;
+    const tid = String(t._id);
+    const calon = await SubkegiatanTahapan.find({ tahapanId: t._id, status: 'aktif', 'alokasiSipd.0': { $exists: true } }).limit(2).lean();
+    expect(calon).toHaveLength(2);
+    const ids = calon.map((d) => d._id);
+    // buat keadaan "beda dengan SIPD": alokasi dikosongkan, ditandai beda
+    await SubkegiatanTahapan.updateMany({ _id: { $in: ids } }, { $set: { alokasi: [], seimbang: false, beda: { ada: true, hashSipd: 'uji' } } });
+    await svc.segarkanNotifikasi(tid);
+    expect(await Notifikasi.countDocuments({ aturan: 'R2', status: 'terbuka', subkegiatanTahapanId: { $in: ids } })).toBe(2);
+    const r = await svc.ikutSipdSemua(admin, tid, {});
+    expect(r.jumlah).toBeGreaterThanOrEqual(2);
+    for (const d of await SubkegiatanTahapan.find({ _id: { $in: ids } }).lean()) {
+      const asal = calon.find((c) => String(c._id) === String(d._id))!;
+      expect(d.beda).toMatchObject({ ada: false, diputuskan: 'ikut_sipd' });
+      expect(d.alokasi.map((a) => String(a.sumberDanaId)).sort()).toEqual(asal.alokasiSipd.map((a) => String(a.sumberDanaId)).sort());
+      expect(d.alokasi.every((a) => a.asal === 'sipd')).toBe(true);
+    }
+    expect(await SubkegiatanTahapan.countDocuments({ tahapanId: t._id, 'beda.ada': true })).toBe(0);
+    expect(await Notifikasi.countDocuments({ aturan: 'R2', status: 'terbuka', tahapanId: t._id })).toBe(0);
+    await cekSamaDenganPenuh(tid);
+  });
+
+  it('unduhan matriks berisi persis gabungan semua halaman matriks', async () => {
+    const t = (await Tahapan.findOne({ jenis: 'PERGESERAN', status: 'terbuka' }).lean())!;
+    const tid = String(t._id);
+    for (const f of [{}, { jumlahSd: 'dua_lebih' as const }, { bedaTagging: '1' }]) {
+      const semua = await svc.matriksSemua(admin, tid, f);
+      const halaman1 = await svc.matriks(admin, tid, { ...f, page: 1, limit: 2 });
+      const gabung = [...halaman1.data];
+      for (let p = 2; (p - 1) * 2 < halaman1.total; p++) gabung.push(...(await svc.matriks(admin, tid, { ...f, page: p, limit: 2 })).data);
+      expect(semua.total).toBe(halaman1.total);
+      expect(JSON.stringify(semua.data)).toBe(JSON.stringify(gabung));
+      expect(JSON.stringify(semua.kolom)).toBe(JSON.stringify(halaman1.kolom));
+    }
+    const e = await svc.ekspor(admin, 'matriks', tid, { jumlahSd: 'dua_lebih' });
+    expect(e.isi.readUInt32LE(0)).toBe(0x04034b50);
+  });
+
+  it('log audit ubah mencatat isi sebelum dan sesudah', async () => {
+    const t = (await Tahapan.findOne({ jenis: 'PERGESERAN', status: 'terbuka' }).lean())!;
+    const d = (await SubkegiatanTahapan.findOne({ tahapanId: t._id, status: 'aktif' }).lean())!;
+    // ubah pagu memakai findOneAndUpdate lean + new: hasil query langsung dipakai plugin audit
+    await svc.ubahPaguSubkegiatan(admin, String(d._id), { updatedAt: new Date(d.updatedAt).toISOString(), pagu: d.pagu + 1000 });
+    const log = (await LogAudit.findOne({ koleksi: 'subkegiatanTahapan', dokumenId: d._id, aksi: 'ubah' }).sort({ waktu: -1 }).lean())!;
+    expect(log.sebelum).toMatchObject({ pagu: d.pagu });
+    expect(log.sesudah).toMatchObject({ pagu: d.pagu + 1000 });
+    expect(Object.keys(log.sesudah ?? {})).not.toContain('updatedAt');
+    // Ikut SIPD satu memakai findOneAndUpdate tanpa lean: tetap tercatat lengkap
+    await SubkegiatanTahapan.updateOne({ _id: d._id }, { $set: { beda: { ada: true, hashSipd: 'uji' } } });
+    await svc.ikutSipd(admin, String(d._id));
+    const log2 = (await LogAudit.findOne({ koleksi: 'subkegiatanTahapan', dokumenId: d._id, aksi: 'ubah' }).sort({ waktu: -1 }).lean())!;
+    expect((log2.sesudah as { beda?: { diputuskan?: string } }).beda?.diputuskan).toBe('ikut_sipd');
+    expect((log2.sebelum as { beda?: { ada?: boolean } }).beda?.ada).toBe(true);
+    await svc.segarkanNotifikasi(String(t._id));
+  });
 });

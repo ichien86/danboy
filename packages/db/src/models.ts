@@ -322,6 +322,8 @@ const hasilSchema = new Schema<HasilBandingDoc>(
 );
 hasilSchema.index({ batchId: 1, aturan: 1 });
 hasilSchema.index({ batchId: 1, skpdId: 1, aturan: 1 });
+// riwayat impor di rincian subkegiatan dicari menurut kunci (sub unit|kode subkegiatan)
+hasilSchema.index({ kunci: 1, _id: -1 });
 hasilSchema.add({
   verifikasi: { type: Schema.Types.Mixed, default: null },
   tindakLanjut: {
@@ -363,6 +365,10 @@ const notifikasiSchema = new Schema<NotifikasiDoc>(
 notifikasiSchema.index({ kunciUnik: 1 }, { unique: true, partialFilterExpression: { status: 'terbuka' } });
 notifikasiSchema.index({ tahapanId: 1, status: 1, skpdId: 1 });
 notifikasiSchema.index({ kunciUnik: 1, status: 1 });
+// daftar notifikasi (terbaru dulu) dan hitung ulang sebagian per subkegiatan / per sumber dana
+notifikasiSchema.index({ tahapanId: 1, status: 1, createdAt: -1 });
+notifikasiSchema.index({ subkegiatanTahapanId: 1, status: 1 });
+notifikasiSchema.index({ sumberDanaId: 1, status: 1 });
 export const Notifikasi = buat('Notifikasi', notifikasiSchema, 'notifikasi');
 
 export { LogAudit } from './audit';

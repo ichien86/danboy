@@ -87,11 +87,23 @@ export function auditPlugin(schema: Schema, opsi: { koleksi: string }) {
       unknown
     > | null;
   });
-  schema.post('findOneAndUpdate', async function (this: QueryAudit) {
+  schema.post('findOneAndUpdate', async function (this: QueryAudit, hasil: unknown) {
     const lama = this._auditLama;
     if (!lama) return;
-    const session = this.getOptions().session as ClientSession | undefined;
-    const baru = (await this.model.findById(lama._id).session(session ?? null).lean()) as Record<string, unknown> | null;
+    const o = this.getOptions() as { session?: ClientSession; new?: boolean; returnDocument?: string; rawResult?: boolean; includeResultMetadata?: boolean };
+    const session = o.session;
+    // hasil query sudah berupa dokumen utuh sesudah diubah (lean, new: true, tanpa proyeksi) -> tidak perlu dibaca lagi
+    const proyeksi = this.projection() as Record<string, unknown> | undefined;
+    const pakaiHasil =
+      !!hasil &&
+      (o.new === true || o.returnDocument === 'after') &&
+      !o.rawResult &&
+      !o.includeResultMetadata &&
+      !!(this as unknown as { _mongooseOptions?: { lean?: unknown } })._mongooseOptions?.lean &&
+      (!proyeksi || Object.keys(proyeksi).length === 0);
+    const baru = pakaiHasil
+      ? (hasil as Record<string, unknown>)
+      : ((await this.model.findById(lama._id).session(session ?? null).lean()) as Record<string, unknown> | null);
     const d = selisih(lama, baru);
     if (!d.berubah) return;
     await catatAudit(

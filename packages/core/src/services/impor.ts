@@ -465,21 +465,25 @@ export async function prosesApbd(batchId: string) {
     await set({ progres: 80 });
 
     const temuanPer = new Map<string, Temuan[]>();
-    for (const t of hasil.temuan) temuanPer.set(t.kunci, [...(temuanPer.get(t.kunci) ?? []), t]);
+    for (const t of hasil.temuan) {
+      const xs = temuanPer.get(t.kunci);
+      if (xs) xs.push(t);
+      else temuanPer.set(t.kunci, [t]);
+    }
     const hitungAturan: Record<string, number> = {};
     for (const t of hasil.temuan) hitungAturan[t.aturan] = (hitungAturan[t.aturan] ?? 0) + 1;
     const hitungOp = { tambah: 0, ubah: 0, tandai_hilang: 0 };
     const docs: Record<string, unknown>[] = [];
+    const tersimpanPerKunci = new Map(tersimpanDocs.map((d) => [kunciSubkegiatan(String(d.subUnitId), d.kodeSubkegiatan), d]));
     const infoKunci = (k: string) => {
       const s = sipd.get(k);
-      const d = tersimpanDocs.find((x) => kunciSubkegiatan(String(x.subUnitId), x.kodeSubkegiatan) === k);
+      const d = tersimpanPerKunci.get(k);
       return {
         skpdId: s?.skpdId ?? (d ? String(d.skpdId) : undefined),
         kodeSubkegiatan: s?.kodeSubkegiatan ?? d?.kodeSubkegiatan,
         namaSubkegiatan: s?.namaSubkegiatan ?? d?.namaSubkegiatan,
       };
     };
-    const tersimpanPerKunci = new Map(tersimpanDocs.map((d) => [kunciSubkegiatan(String(d.subUnitId), d.kodeSubkegiatan), d]));
     for (const op of hasil.operasi) {
       hitungOp[op.jenis]++;
       const ts = temuanPer.get(op.kunci) ?? [];

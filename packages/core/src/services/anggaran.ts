@@ -484,9 +484,19 @@ export async function hapusSubkegiatan(user: SessionUser, id: string) {
 
 /** Sisa pagu sumber dana yang tersentuh, agar tampilan langsung memperbarui angka. */
 async function ringkasanSisa(tahapanId: ReturnType<typeof oid>, sdIds: string[], session?: ClientSession) {
-  const terpakai = await terpakaiPerSumberDana(tahapanId, {}, session);
-  const pagu = await PaguSumberDana.find({ tahapanId, sumberDanaId: { $in: sdIds.map(oid) } }).session(session ?? null).lean();
-  const sd = await SumberDana.find({ _id: { $in: sdIds.map(oid) } }).session(session ?? null).lean();
+  const ids = sdIds.map(oid);
+  // pemakaian hanya untuk sumber dana yang tersentuh; ketiga kueri jalan bersamaan
+  const [pakai, pagu, sd] = await Promise.all([
+    SubkegiatanTahapan.aggregate<{ _id: unknown; terpakai: number }>([
+      { $match: { tahapanId, status: 'aktif', 'alokasi.sumberDanaId': { $in: ids } } },
+      { $unwind: '$alokasi' },
+      { $match: { 'alokasi.sumberDanaId': { $in: ids }, 'alokasi.nilai': { $gt: 0 } } },
+      { $group: { _id: '$alokasi.sumberDanaId', terpakai: { $sum: '$alokasi.nilai' } } },
+    ]).session(session ?? null),
+    PaguSumberDana.find({ tahapanId, sumberDanaId: { $in: ids } }).session(session ?? null).lean(),
+    SumberDana.find({ _id: { $in: ids } }).session(session ?? null).lean(),
+  ]);
+  const terpakai = new Map(pakai.map((p) => [String(p._id), p]));
   const paguPer = new Map(pagu.map((p) => [String(p.sumberDanaId), p.nilai]));
   return sd.map((s) => {
     const id = String(s._id);
@@ -562,21 +572,25 @@ export async function ikutSipdSemua(user: SessionUser, tahapanId: string, f: Par
   const t = await pastikanTahapanTerbuka(tahapanId);
   const filter = { ...filterDaftar(user, t._id, { ...f, status: undefined }), 'beda.ada': true };
   const jumlah = await dalamTransaksi(async (session) => {
-    const docs = await SubkegiatanTahapan.find(filter).session(session).lean<SubkegiatanTahapanDoc[]>();
-    for (const d of docs) {
+    // cukup pagu dan alokasi SIPD; perubahan dikirim per 500 dalam satu bulkWrite, bukan satu per satu
+    const docs = await SubkegiatanTahapan.find(filter).select('pagu alokasiSipd').session(session).lean<Pick<SubkegiatanTahapanDoc, '_id' | 'pagu' | 'alokasiSipd'>[]>();
+    const pada = new Date();
+    const ops = docs.map((d) => {
       const r = hitungIkutSipd({ pagu: d.pagu, alokasiSipd: (d.alokasiSipd ?? []).map((a) => ({ sumberDanaId: String(a.sumberDanaId), nilai: a.nilai })) });
-      await SubkegiatanTahapan.updateOne(
-        { _id: d._id },
-        {
-          $set: {
-            alokasi: r.alokasi.map((a) => ({ ...a, sumberDanaId: oid(a.sumberDanaId) })),
-            seimbang: r.seimbang,
-            beda: { ada: false, diputuskan: 'ikut_sipd', hashSipd: r.hash, oleh: oid(user.id), pada: new Date() },
+      return {
+        updateOne: {
+          filter: { _id: d._id },
+          update: {
+            $set: {
+              alokasi: r.alokasi.map((a) => ({ ...a, sumberDanaId: oid(a.sumberDanaId) })),
+              seimbang: r.seimbang,
+              beda: { ada: false, diputuskan: 'ikut_sipd' as const, hashSipd: r.hash, oleh: oid(user.id), pada },
+            },
           },
         },
-        { session },
-      );
-    }
+      };
+    });
+    for (let i = 0; i < ops.length; i += 500) await SubkegiatanTahapan.bulkWrite(ops.slice(i, i + 500), { session, ordered: false });
     await catatAudit({ aksi: 'ikut_sipd_semua', koleksi: 'subkegiatanTahapan', dokumenId: t._id, sesudah: { jumlah: docs.length } }, session);
     return docs.length;
   });
@@ -610,6 +624,42 @@ async function daftarSubkegiatanLengkap(user: SessionUser, tahapanId: string, f:
   return ser({ data, total, page, limit, sumberDana: Object.fromEntries(sd.map((s) => [String(s._id), s])) });
 }
 
+/** Kolom matriks = sumber dana yang dipakai dalam cakupan, digabung di server dalam satu permintaan. */
+function kolomMatriks(user: SessionUser, tahapanId: ReturnType<typeof oid>) {
+  return SubkegiatanTahapan.aggregate<{ _id: unknown; kode: string; nama: string; khusus: boolean }>([
+    { $match: { tahapanId, ...cakupanDb(user) } },
+    { $unwind: '$alokasi' },
+    { $group: { _id: '$alokasi.sumberDanaId' } },
+    { $lookup: { from: 'sumberDana', localField: '_id', foreignField: '_id', as: 'sd' } },
+    { $unwind: '$sd' },
+    { $replaceWith: { _id: '$sd._id', kode: '$sd.kode', nama: '$sd.nama', khusus: '$sd.khusus' } },
+    { $sort: { kode: 1 } },
+  ]);
+}
+
+/** Baris matriks (urut kode), dengan atau tanpa paginasi. */
+function barisMatriks(filter: Record<string, unknown>, halaman?: { skip: number; limit: number }) {
+  return SubkegiatanTahapan.aggregate([
+    { $match: filter },
+    { $sort: { kodeSubkegiatan: 1, _id: 1 } },
+    ...(halaman ? [{ $skip: halaman.skip }, { $limit: halaman.limit }] : []),
+    { $project: { kodeSubkegiatan: 1, namaSubkegiatan: 1, pagu: 1, alokasi: 1, seimbang: 1, skpdId: 1, subUnitId: 1, beda: 1, status: 1 } },
+    ...tahapGabung({ sumberDana: false }),
+  ]);
+}
+
+/**
+ * Semua baris matriks sesuai saringan dalam satu agregasi, untuk unduhan Excel. Bentuk datanya sama dengan
+ * gabungan semua halaman matriks(); tidak menghitung total dan tidak mengulang saringan per halaman.
+ */
+export async function matriksSemua(user: SessionUser, tahapanId: string, f: Partial<FilterSubkegiatan>) {
+  pastikanBoleh(user, 'lihat');
+  const t = await muatTahapan(tahapanId);
+  const filter = await filterDaftarLengkap(user, t, f);
+  const [kolom, data] = await Promise.all([kolomMatriks(user, t._id), barisMatriks(filter).allowDiskUse(true)]);
+  return ser({ kolom, data, total: data.length });
+}
+
 /** Matriks subkegiatan × sumber dana. Kolom = sumber dana yang dipakai dalam cakupan. */
 export async function matriks(user: SessionUser, tahapanId: string, f: Partial<FilterSubkegiatan>) {
   pastikanBoleh(user, 'lihat');
@@ -618,24 +668,8 @@ export async function matriks(user: SessionUser, tahapanId: string, f: Partial<F
   const page = f.page ?? 1;
   const limit = Math.min(f.limit ?? 100, 200);
   const [kolom, data, total, jumlah] = await Promise.all([
-    // kolom = sumber dana yang dipakai dalam cakupan, digabung di server dalam satu permintaan
-    SubkegiatanTahapan.aggregate<{ _id: unknown; kode: string; nama: string; khusus: boolean }>([
-      { $match: { tahapanId: t._id, ...cakupanDb(user) } },
-      { $unwind: '$alokasi' },
-      { $group: { _id: '$alokasi.sumberDanaId' } },
-      { $lookup: { from: 'sumberDana', localField: '_id', foreignField: '_id', as: 'sd' } },
-      { $unwind: '$sd' },
-      { $replaceWith: { _id: '$sd._id', kode: '$sd.kode', nama: '$sd.nama', khusus: '$sd.khusus' } },
-      { $sort: { kode: 1 } },
-    ]),
-    SubkegiatanTahapan.aggregate([
-      { $match: filter },
-      { $sort: { kodeSubkegiatan: 1 } },
-      { $skip: (page - 1) * limit },
-      { $limit: limit },
-      { $project: { kodeSubkegiatan: 1, namaSubkegiatan: 1, pagu: 1, alokasi: 1, seimbang: 1, skpdId: 1, subUnitId: 1, beda: 1, status: 1 } },
-      ...tahapGabung({ sumberDana: false }),
-    ]),
+    kolomMatriks(user, t._id),
+    barisMatriks(filter, { skip: (page - 1) * limit, limit }),
     SubkegiatanTahapan.countDocuments(filter),
     jumlahDaftar(filter),
   ]);
