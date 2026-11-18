@@ -258,6 +258,8 @@ export interface ImporBatchDoc {
   _id: Id; tahapanId?: Id | null; tahun?: number | null; jenis: JenisImpor; namaFile: string; hashFile: string;
   fileId: Id; ukuran: number; status: StatusBatch; progres: number; ringkasan: Record<string, unknown>;
   galat?: string | null; olehId: Id; createdAt: Date; updatedAt: Date; diterapkanPada?: Date | null;
+  /** Pilihan saat unggah. abaikanSumberDana: impor APBD hanya mengambil pagu per subkegiatan. */
+  opsi?: { abaikanSumberDana?: boolean };
 }
 const batchSchema = new Schema<ImporBatchDoc>(
   {
@@ -274,6 +276,7 @@ const batchSchema = new Schema<ImporBatchDoc>(
     galat: { type: String, default: null },
     olehId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     diterapkanPada: { type: Date, default: null },
+    opsi: { abaikanSumberDana: { type: Boolean, default: false } },
   },
   { ...opsi, minimize: false },
 );

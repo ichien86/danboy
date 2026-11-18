@@ -7,7 +7,7 @@ export const GET = rute(async ({ user, query }) =>
   svc.daftarImpor(user, { jenis: query.jenis, tahapanId: query.tahapanId, page: angka(query.page, 1), limit: angka(query.limit, 20) }),
 );
 
-/** multipart: jenis, tahapanId?, tahun?, versi?, file */
+/** multipart: jenis, tahapanId?, tahun?, versi?, abaikanSumberDana? ("1" = hanya pagu), file */
 export const POST = rute(async ({ req, user }) => {
   const batas = svc.batasUnggahMb() * 1024 * 1024;
   const panjang = Number(req.headers.get('content-length') ?? 0);
@@ -24,6 +24,7 @@ export const POST = rute(async ({ req, user }) => {
     tahapanId: (fd.get('tahapanId') as string) || undefined,
     tahun: Number.isInteger(tahun) ? tahun : undefined,
     versi: ((fd.get('versi') as string) || '').trim().slice(0, 80) || undefined,
+    abaikanSumberDana: fd.get('abaikanSumberDana') === '1',
     namaFile: file.name.slice(0, 200),
     isi: Buffer.from(await file.arrayBuffer()),
   });

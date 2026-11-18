@@ -78,6 +78,27 @@ export function TombolImpor({
               Tahapan tujuan: <b>{tahapan.nama}</b>
             </Peringatan>
           )}
+          {jenis === 'apbd' && (
+            <fieldset className="space-y-2">
+              <legend className="mb-1 text-sm font-medium">Yang diambil dari file</legend>
+              <label className="flex cursor-pointer items-start gap-2 text-sm">
+                <input type="radio" name="abaikanSumberDana" value="0" defaultChecked className="mt-0.5" />
+                <span>
+                  Pagu dan sumber dana
+                  <span className="block text-xs text-redup">Pagu per subkegiatan beserta komposisi sumber dananya; beda sumber dana masuk menu Perbedaan SIPD.</span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2 text-sm">
+                <input type="radio" name="abaikanSumberDana" value="1" className="mt-0.5" />
+                <span>
+                  Hanya pagu per subkegiatan
+                  <span className="block text-xs text-redup">
+                    Kolom sumber dana diabaikan. Alokasi sumber dana yang sudah ada tidak diubah; subkegiatan baru masuk tanpa sumber dana dan diisi di aplikasi.
+                  </span>
+                </span>
+              </label>
+            </fieldset>
+          )}
           {jenis === 'nomenklatur' && (
             <Bidang label="Versi nomenklatur" htmlFor="versi" bantuan="Misal 900.1-861-2026. Kosongkan untuk memakai nama file.">
               <Masukan id="versi" name="versi" maxLength={80} />

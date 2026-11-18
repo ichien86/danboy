@@ -561,4 +561,36 @@ describe('alur impor end-to-end (service + model)', () => {
     await expect(svc.hapusSubkegiatan(admin, String(r.dokumen._id))).rejects.toMatchObject({ http: 404 });
     await cekSamaDenganPenuh(tid);
   });
+
+  it('impor APBD "hanya pagu": sumber dana di file diabaikan, alokasi tersimpan tetap, kode sumber dana asing tidak ditahan', async () => {
+    const t = (await Tahapan.findOne({ jenis: 'PERGESERAN', status: 'terbuka' }).lean())!;
+    const tid = String(t._id);
+    const kunci = { tahapanId: t._id, kodeSubkegiatan: '1.01.02.2.01.0001' };
+    const sebelum = (await SubkegiatanTahapan.findOne(kunci).lean())!;
+    // baris DAK Fisik USB: sumber dana diganti kode yang tidak ada di master, pagu naik 100 juta
+    const isi = ubahCsv((r) =>
+      r.map((x) => (x.includes('USB SDN 3 Mojosongo') ? x.replace(',1.2.02.01.01,DAK Fisik,', ',9.9.99.99,Sumber Asing,').replace('"1.500.000.000","1.500.000.000"', '"1.600.000.000","1.600.000.000"') : x)),
+    );
+    const b = await unggahDanTunggu(admin, { jenis: 'apbd', tahapanId: tid, namaFile: 'hanya-pagu.csv', isi, abaikanSumberDana: true });
+    expect(b.status).toBe('pratinjau');
+    expect(b.opsi?.abaikanSumberDana).toBe(true);
+    expect(b.ringkasan.abaikanSumberDana).toBe(true);
+    expect((b.ringkasan.rujukanHilang as { sumberDana: unknown[] }).sumberDana).toEqual([]);
+    expect(b.ringkasan.barisDitahan).toBe(0);
+    expect((b.ringkasan.temuan as Record<string, number>).R2 ?? 0).toBe(0);
+    await terapkan(admin, b._id);
+    const sesudah = (await SubkegiatanTahapan.findOne(kunci).lean())!;
+    expect(sesudah.pagu).toBe(1_625_000_000);
+    expect(JSON.stringify(sesudah.alokasi)).toBe(JSON.stringify(sebelum.alokasi));
+    expect(JSON.stringify(sesudah.alokasiSipd)).toBe(JSON.stringify(sebelum.alokasiSipd));
+    expect(sesudah.beda.ada).toBe(sebelum.beda.ada);
+    expect(sesudah.seimbang).toBe(sesudah.alokasi.reduce((a, x) => a + x.nilai, 0) === sesudah.pagu);
+    await cekSamaDenganPenuh(tid);
+
+    // file sama dengan pilihan "pagu dan sumber dana" tetap diproses (tidak dianggap sama persis)
+    const b2 = await unggahDanTunggu(admin, { jenis: 'apbd', tahapanId: tid, namaFile: 'hanya-pagu.csv', isi });
+    expect(b2.ringkasan.tidakAdaPerubahan).not.toBe(true);
+    expect((b2.ringkasan.rujukanHilang as { sumberDana: { kode: string }[] }).sumberDana.map((x) => x.kode)).toEqual(['9.9.99.99']);
+    await svc.batalImpor(admin, String(b2._id));
+  });
 });

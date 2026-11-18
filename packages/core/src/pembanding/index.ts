@@ -149,7 +149,13 @@ const normalBeda = (b: Beda): Beda => {
 const normalAlokasi = (xs: AlokasiTersimpan[]) =>
   xs.map((a) => ({ sumberDanaId: String(a.sumberDanaId), nilai: a.nilai, nilaiSipd: a.nilaiSipd ?? 0, asal: a.asal }));
 
-export function banding(tersimpan: Map<string, Tersimpan>, sipd: Map<string, DataSipd>): HasilBanding {
+/**
+ * Banding tersimpan vs SIPD. Dengan abaikanSumberDana hanya pagu (dan nama/status) yang diambil dari SIPD:
+ * alokasi sumber dana tersimpan tidak disentuh dan tidak dibandingkan (tidak ada R2), subkegiatan baru masuk
+ * tanpa sumber dana, dan "seimbang" dihitung ulang terhadap pagu baru.
+ */
+export function banding(tersimpan: Map<string, Tersimpan>, sipd: Map<string, DataSipd>, opsi: { abaikanSumberDana?: boolean } = {}): HasilBanding {
+  const abaikanSd = !!opsi.abaikanSumberDana;
   const operasi: Operasi[] = [];
   const temuan: Temuan[] = [];
   const kunciSemua = [...new Set([...tersimpan.keys(), ...sipd.keys()])].sort();
@@ -160,7 +166,7 @@ export function banding(tersimpan: Map<string, Tersimpan>, sipd: Map<string, Dat
 
     if (!t && s) {
       // R7: subkegiatan baru, alokasi ikut SIPD
-      const alokasiSipd = urutkan(s.alokasi);
+      const alokasiSipd = abaikanSd ? [] : urutkan(s.alokasi);
       const alokasi = alokasiSipd.map((a) => ({ ...a, nilaiSipd: a.nilai, asal: 'sipd' as const }));
       operasi.push({
         jenis: 'tambah',
@@ -200,6 +206,16 @@ export function banding(tersimpan: Map<string, Tersimpan>, sipd: Map<string, Dat
     if (t.pagu !== s.pagu) {
       set.pagu = s.pagu;
       temuan.push({ aturan: 'R1', kunci, id: t.id, sebelum: { pagu: t.pagu }, sesudah: { pagu: s.pagu } });
+    }
+
+    if (abaikanSd) {
+      // hanya pagu: alokasi, nilai SIPD, dan keputusan perbedaan tetap seperti tersimpan
+      const rincianKosong = urutkanRincian(s.rincian);
+      if (!sama(rincianKosong, urutkanRincian(t.rincian ?? []))) set.rincian = rincianKosong;
+      const seimbangPagu = totalAlokasi(normalAlokasi(t.alokasi)) === (set.pagu ?? t.pagu);
+      if (seimbangPagu !== t.seimbang) set.seimbang = seimbangPagu;
+      if (Object.keys(set).length) operasi.push({ jenis: 'ubah', kunci, id: t.id, set });
+      continue;
     }
 
     const alokasiSipd = urutkan(s.alokasi);

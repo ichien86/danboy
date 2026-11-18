@@ -180,6 +180,13 @@ export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: str
           </Peringatan>
         </div>
       )}
+      {apbd && r.abaikanSumberDana === true && (
+        <div className="mb-4">
+          <Peringatan nada="info" judul="Hanya pagu per subkegiatan">
+            Sumber dana di file diabaikan: alokasi sumber dana yang sudah ada tidak diubah, subkegiatan baru masuk tanpa sumber dana.
+          </Peringatan>
+        </div>
+      )}
       {typeof r.pesan === 'string' && (
         <div className="mb-4">
           <Peringatan nada="info">{r.pesan}</Peringatan>

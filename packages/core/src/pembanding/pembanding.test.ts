@@ -168,4 +168,29 @@ describe('keputusan Admin', () => {
     expect(r.alokasi.map((a) => a.asal)).toEqual(['admin', 'sipd']);
     expect(r.seimbang).toBe(false);
   });
+
+  it('hanya pagu (abaikan sumber dana): pagu diambil, alokasi tersimpan tidak disentuh, tanpa R2', () => {
+    const lama = sipd([
+      ['dau', 100],
+      ['sg', 50],
+    ]);
+    // di SIPD sumber dananya lain dan pagunya naik
+    const baru = sipd([['dak', 200]]);
+    const h = banding(new Map([[K, dariSipd(lama)]]), new Map([[K, baru]]), { abaikanSumberDana: true });
+    expect(h.temuan.map((t) => t.aturan)).toEqual(['R1']);
+    const op = h.operasi[0] as OpUbah;
+    expect(op.set).toMatchObject({ pagu: 200, seimbang: false });
+    expect(op.set.alokasi).toBeUndefined();
+    expect(op.set.alokasiSipd).toBeUndefined();
+    expect(op.set.beda).toBeUndefined();
+
+    // subkegiatan baru masuk tanpa sumber dana
+    const t = banding(new Map(), new Map([[K, baru]]), { abaikanSumberDana: true });
+    const tambah = t.operasi[0] as OpTambah;
+    expect(tambah.data).toMatchObject({ pagu: 200, alokasi: [], alokasiSipd: [], seimbang: false });
+
+    // pagu sama: tidak ada operasi meski sumber dana di SIPD berbeda
+    const sama = banding(new Map([[K, dariSipd(lama)]]), new Map([[K, sipd([['dak', 150]])]]), { abaikanSumberDana: true });
+    expect(sama.operasi).toEqual([]);
+  });
 });

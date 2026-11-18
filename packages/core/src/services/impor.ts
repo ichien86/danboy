@@ -52,6 +52,8 @@ export interface InputUnggah {
   tahapanId?: string;
   tahun?: number;
   versi?: string;
+  /** Impor APBD: hanya pagu per subkegiatan, sumber dana di file diabaikan. */
+  abaikanSumberDana?: boolean;
   namaFile: string;
   isi: Buffer;
 }
@@ -106,6 +108,7 @@ export async function unggahImpor(user: SessionUser, input: InputUnggah) {
     status: 'diunggah',
     olehId: oid(user.id),
     ringkasan: input.versi ? { versi: input.versi } : {},
+    opsi: { abaikanSumberDana: input.jenis === 'apbd' && !!input.abaikanSumberDana },
   });
   const job = input.jenis === 'apbd' ? 'imporApbd:proses' : input.jenis === 'verifikasi' ? 'verifikasi:proses' : 'imporMaster:proses';
   await tambahJob(job, { batchId: String(batch._id), userId: user.id });
@@ -241,7 +244,9 @@ export async function prosesApbd(batchId: string) {
     const terakhir = await ImporBatch.findOne({ tahapanId: tahapan._id, jenis: 'apbd', status: 'diterapkan' })
       .sort({ diterapkanPada: -1 })
       .lean<ImporBatchDoc>();
-    if (terakhir && terakhir.hashFile === batch.hashFile) {
+    const abaikanSd = !!batch.opsi?.abaikanSumberDana;
+    // file sama tetapi pilihan berbeda (hanya pagu <-> beserta sumber dana) tetap diproses
+    if (terakhir && terakhir.hashFile === batch.hashFile && !!terakhir.opsi?.abaikanSumberDana === abaikanSd) {
       await HasilBanding.deleteMany({ batchId: batch._id });
       await set({
         status: 'pratinjau',
@@ -383,7 +388,8 @@ export async function prosesApbd(batchId: string) {
           catatHilang(hilang.subkegiatan, kodeSub, simpan.namaSubkegiatan as string, pagu);
           rujukan.push('subkegiatan');
         }
-        if (!sdPer.has(kodeSd)) {
+        // pilihan "hanya pagu": kode sumber dana di file tidak diperiksa
+        if (!abaikanSd && !sdPer.has(kodeSd)) {
           catatHilang(hilang.sumberDana, kodeSd, simpan.namaSumberDana as string, pagu);
           rujukan.push('sumber_dana');
         }
@@ -400,7 +406,7 @@ export async function prosesApbd(batchId: string) {
           subUnitId: su.id,
           kodeSubkegiatan: kodeSub,
           namaSubkegiatan: simpan.namaSubkegiatan as string,
-          sumberDanaId: sdPer.get(kodeSd)!,
+          sumberDanaId: sdPer.get(kodeSd) ?? '',
           kodeSumberDana: kodeSd,
           kodeRekening: simpan.kodeRekening as string,
           paket: (simpan.paket as string) || undefined,
@@ -455,7 +461,7 @@ export async function prosesApbd(batchId: string) {
         rincian: (d.rincian ?? []).map((r) => ({ ...r })),
       });
     }
-    const hasil = banding(tersimpan, sipd);
+    const hasil = banding(tersimpan, sipd, { abaikanSumberDana: abaikanSd });
     await set({ progres: 80 });
 
     const temuanPer = new Map<string, Temuan[]>();
@@ -539,6 +545,7 @@ export async function prosesApbd(batchId: string) {
         rujukanHilang,
         perbedaanNama,
         versi: undefined,
+        abaikanSumberDana: abaikanSd,
         jumlahSubkegiatanFile: sipd.size,
         jumlahSubkegiatanTersimpan: tersimpan.size,
         operasi: hitungOp,

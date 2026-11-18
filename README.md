@@ -139,6 +139,10 @@ di `TUJUAN_CADANGAN`. **Pemantauan:** `GET /api/kesehatan` (MongoDB, Redis, antr
    lalu impor diproses ulang otomatis. Menerapkan impor yang masih punya baris ditahan meminta konfirmasi terlebih dulu.
    Nama SKPD/sub unit di SIPD yang berbeda dengan master tidak menghentikan impor (data ditautkan menurut kode), tetapi
    muncul sebagai peringatan di pratinjau dan di Notifikasi.
+   **Pilihan saat unggah.** *Pagu dan sumber dana* (bawaan): pagu per subkegiatan beserta komposisi sumber dananya;
+   beda sumber dana masuk menu Perbedaan SIPD. *Hanya pagu per subkegiatan*: kolom sumber dana diabaikan, alokasi sumber
+   dana yang sudah ada tidak diubah (seimbang/R4 dihitung ulang terhadap pagu baru), subkegiatan baru masuk tanpa sumber
+   dana, dan kode sumber dana yang belum ada di master tidak menahan baris.
 
 3. **Rekap Sumber Dana → Isi pagu sumber dana**. Pelanggaran pagu tidak mengunci, hanya memicu R3.
 4. **Perbedaan SIPD**: putuskan Ikut SIPD atau Edit Sendiri. Keputusan diingat sampai komposisi SIPD berubah lagi.
