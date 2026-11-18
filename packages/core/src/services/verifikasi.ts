@@ -9,6 +9,7 @@ import {
   SubkegiatanTahapan,
   SumberDana,
   bacaFile,
+  hapusFile,
   oid,
   sambung,
   type ImporBatchDoc,
@@ -213,10 +214,50 @@ export async function prosesVerifikasi(batchId: string) {
         kodeSdAsing,
       },
     });
+    // hanya hasil terbaru yang disimpan: verifikasi sebelumnya pada tahapan ini dibuang
+    await buangVerifikasiLama(tahapan._id, batch._id).catch((e) => console.error('[verifikasi] gagal membuang hasil lama', e));
   } catch (e) {
     const pesan = e instanceof GalatFormat ? `Kolom wajib tidak ditemukan: ${e.kolomHilang.join(', ')}` : e instanceof Error ? e.message : String(e);
     await set({ status: 'gagal', galat: pesan, progres: 100 });
   }
+}
+
+/** Hapus batch verifikasi beserta hasil, baris, file unggahan, dan notifikasi VS yang menunjuk ke batch itu. */
+async function buangBatch(ids: ReturnType<typeof oid>[]) {
+  if (!ids.length) return;
+  const batch = await ImporBatch.find({ _id: { $in: ids }, jenis: 'verifikasi' }).select('fileId').lean();
+  const tautan = ids.map((id) => new RegExp(`^/verifikasi/${String(id)}(\\?|$)`));
+  await Promise.all([
+    HasilBanding.deleteMany({ batchId: { $in: ids } }),
+    ImporBaris.deleteMany({ batchId: { $in: ids } }),
+    Notifikasi.deleteMany({ aturan: 'VS', $or: [{ batchId: { $in: ids } }, { tautan: { $in: tautan } }] }),
+  ]);
+  for (const b of batch) if (b.fileId) await hapusFile(b.fileId);
+  await ImporBatch.deleteMany({ _id: { $in: ids }, jenis: 'verifikasi' });
+}
+
+/**
+ * Setelah verifikasi baru selesai, verifikasi sebelumnya pada tahapan yang sama tidak dibutuhkan lagi.
+ * Notifikasi VS yang masih terbuka sudah diarahkan ke batch baru; batchId-nya ikut dipindah sebelum batch lama dibuang.
+ */
+async function buangVerifikasiLama(tahapanId: unknown, batchBaru: unknown) {
+  const lama = await ImporBatch.find({ jenis: 'verifikasi', tahapanId: oid(tahapanId), _id: { $ne: oid(batchBaru) }, status: { $in: ['selesai', 'gagal'] } })
+    .select('_id')
+    .lean();
+  if (!lama.length) return;
+  const ids = lama.map((b) => b._id);
+  await Notifikasi.updateMany({ aturan: 'VS', status: 'terbuka', tahapanId: oid(tahapanId) }, { $set: { batchId: oid(batchBaru) } });
+  await buangBatch(ids);
+}
+
+/** DELETE /api/verifikasi/{id}: hapus hasil verifikasi (Admin). Tidak mengubah data anggaran. */
+export async function hapusVerifikasi(user: SessionUser, batchId: string) {
+  pastikanBoleh(user, 'impor');
+  const b = await muatBatchVerifikasi(batchId);
+  if (b.status === 'diunggah' || b.status === 'diproses') throw new Galat('IMPOR_BERJALAN', 'Verifikasi masih diproses; tunggu sampai selesai');
+  await buangBatch([b._id as ReturnType<typeof oid>]);
+  await catatAudit({ aksi: 'hapus', koleksi: 'imporBatch', dokumenId: b._id, sebelum: { jenis: 'verifikasi', judul: b.judul ?? null, namaFile: b.namaFile } });
+  return { ok: true };
 }
 
 /** Batch verifikasi beserta nama pengunggah dan tahapan, digabung di server dalam satu permintaan (bentuk sama dengan populate). */

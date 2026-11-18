@@ -12,6 +12,7 @@ export const metadata: Metadata = { title: 'Verifikasi SIPD' };
 interface Batch {
   _id: string;
   namaFile: string;
+  judul?: string | null;
   status: string;
   createdAt: string;
   galat?: string | null;
@@ -37,6 +38,7 @@ export default async function Verifikasi({ searchParams }: { searchParams: SP })
         <Peringatan nada="info">
           Unggah ekspor rincian APBD dari SIPD untuk mengecek apakah sumber dana yang diinput SKPD di SIPD sudah sama dengan alokasi di aplikasi.
           Verifikasi <b>tidak mengubah data apa pun</b>. Hasilnya bisa diunduh per SKPD, dan setiap SKPD yang belum sesuai mendapat notifikasi.
+          Hanya hasil verifikasi terbaru yang disimpan.
         </Peringatan>
       </div>
       <div className={bolehUnggah ? 'grid gap-4 xl:grid-cols-[24rem_1fr]' : ''}>
@@ -45,13 +47,13 @@ export default async function Verifikasi({ searchParams }: { searchParams: SP })
             <FormVerifikasi tahapanId={String(tahapan._id)} namaTahapan={tahapan.nama} batasMb={batasUnggahMb()} />
           </Kartu>
         )}
-        <Kartu judul="Riwayat verifikasi" padat>
+        <Kartu judul="Hasil verifikasi" padat>
           {r.data.length ? (
             <>
               <Tabel>
                 <thead>
                   <tr>
-                    <TH>File</TH>
+                    <TH>Judul</TH>
                     <TH>Hasil</TH>
                     <TH>Status</TH>
                     <TH>Waktu</TH>
@@ -66,9 +68,13 @@ export default async function Verifikasi({ searchParams }: { searchParams: SP })
                       <tr key={b._id} className="hover:bg-latar/60">
                         <TD>
                           <Link href={`/verifikasi/${b._id}`} className="font-medium hover:underline">
-                            {b.namaFile}
+                            {b.judul || b.namaFile}
                           </Link>
-                          {b.olehId && <span className="block text-xs text-redup">oleh {b.olehId.nama}</span>}
+                          <span className="block text-xs text-redup">
+                            {b.judul ? `${b.namaFile}` : ''}
+                            {b.judul && b.olehId ? ' · ' : ''}
+                            {b.olehId ? `oleh ${b.olehId.nama}` : ''}
+                          </span>
                         </TD>
                         <TD>
                           {b.status === 'selesai' ? (

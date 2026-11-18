@@ -55,6 +55,35 @@ export function CentangSipd({ batchId, hasilId, awal, label }: { batchId: string
   );
 }
 
+/** Hapus hasil verifikasi ini (data anggaran tidak berubah); notifikasi SKPD dari verifikasi ini ikut dihapus. */
+export function HapusVerifikasi({ batchId }: { batchId: string }) {
+  const [memuat, setMemuat] = useState(false);
+  const toast = useToast();
+  const router = useRouter();
+  return (
+    <Tombol
+      varian="hantu"
+      className="text-bahaya"
+      memuat={memuat}
+      onClick={async () => {
+        if (!confirm('Hapus hasil verifikasi ini? Notifikasi SKPD dari verifikasi ini ikut dihapus. Data anggaran tidak berubah.')) return;
+        setMemuat(true);
+        try {
+          await api(`/api/verifikasi/${batchId}`, { method: 'DELETE' });
+          toast('Hasil verifikasi dihapus');
+          router.replace('/verifikasi');
+          router.refresh();
+        } catch (e) {
+          toast(pesanGalat(e), 'bahaya');
+          setMemuat(false);
+        }
+      }}
+    >
+      Hapus
+    </Tombol>
+  );
+}
+
 /** Cek ulang file yang sama terhadap alokasi aplikasi terbaru (misal setelah Admin memperbaiki alokasi). */
 export function CekUlang({ batchId }: { batchId: string }) {
   const [memuat, setMemuat] = useState(false);

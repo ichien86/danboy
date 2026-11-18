@@ -387,8 +387,26 @@ describe('alur impor end-to-end (service + model)', () => {
     expect((b2.ringkasan.perStatus as Record<string, number>).sumber_dana_berbeda).toBe(0);
     expect(await Notifikasi.countDocuments({ aturan: 'VS', status: 'terbuka' })).toBe(1); // hanya Disnaker (tidak ada di SIPD)
 
-    const x = await svc.eksporVerifikasi(admin, String(b._id));
+    // hanya hasil terbaru yang disimpan: batch pertama beserta hasil dan notifikasinya dibuang
+    expect(await ImporBatch.exists({ _id: b._id })).toBeNull();
+    expect(await HasilBanding.countDocuments({ batchId: b._id })).toBe(0);
+    expect(await Notifikasi.countDocuments({ aturan: 'VS', batchId: b._id })).toBe(0);
+    const daftar = await svc.daftarVerifikasi(admin, tahapanId);
+    expect(daftar.data.map((d) => String(d._id))).toEqual([String(b2._id)]);
+    expect(await Notifikasi.countDocuments({ aturan: 'VS', status: 'terbuka', batchId: b2._id })).toBe(1);
+
+    const x = await svc.eksporVerifikasi(admin, String(b2._id));
     expect(x.isi.readUInt32LE(0)).toBe(0x04034b50);
+
+    // judul tersimpan; hapus manual membuang hasil dan notifikasinya
+    const b3 = await unggahDanTunggu(admin, { jenis: 'verifikasi', tahapanId, namaFile: 'cek-3.csv', isi: sesuai, judul: 'Cek minggu ke-3' });
+    expect(b3.judul).toBe('Cek minggu ke-3');
+    expect(await ImporBatch.exists({ _id: b2._id })).toBeNull();
+    await expect(svc.hapusVerifikasi(skpd, String(b3._id))).rejects.toMatchObject({ http: 403 });
+    await svc.hapusVerifikasi(admin, String(b3._id));
+    expect(await ImporBatch.exists({ _id: b3._id })).toBeNull();
+    expect(await HasilBanding.countDocuments({ batchId: b3._id })).toBe(0);
+    expect(await Notifikasi.countDocuments({ aturan: 'VS', status: 'terbuka' })).toBe(0);
   });
 
   it('impor APBD tidak membuat master; rujukan hilang ditahan, nama SKPD beda diperingatkan, lalu dilengkapi sesuai kewenangan', async () => {

@@ -6,7 +6,7 @@ import { hasilVerifikasi, LABEL_STATUS_VERIFIKASI } from '@danboy/core/services'
 import { Rupiah, StatusBatch, tanggal } from '@/components/domain';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Masukan, Paginasi, Peringatan, Pilihan, Statistik, Tabel, TD, TH, TautanTombol, Tombol, cx } from '@/components/ui';
 import { konteksHalaman, num, type SP } from '@/lib/halaman';
-import { CekUlang, CentangSipd, Pemantau } from './klien';
+import { CekUlang, CentangSipd, HapusVerifikasi, Pemantau } from './klien';
 
 export const metadata: Metadata = { title: 'Hasil verifikasi SIPD' };
 
@@ -65,7 +65,7 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
   const saringTandai = tandai === 'belum' || tandai === 'sudah' ? tandai : undefined;
   const r = await hasilVerifikasi(user, batchId, { status: status || undefined, tandai: saringTandai, skpd: sp.skpd, q: sp.q, page, limit: 50 }).catch(() => null);
   if (!r) notFound();
-  const b = r.batch as unknown as { _id: string; namaFile: string; status: string; galat?: string; createdAt: string; progres: number; tahapanId?: { nama: string }; ringkasan: Ringkasan };
+  const b = r.batch as unknown as { _id: string; namaFile: string; judul?: string | null; status: string; galat?: string; createdAt: string; progres: number; tahapanId?: { nama: string }; ringkasan: Ringkasan };
   const rk = b.ringkasan ?? {};
   const pg = r.tindakLanjut as unknown as Progres;
   const nama = rk.namaSumberDana ?? {};
@@ -87,18 +87,20 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
           <span className="inline-flex flex-wrap items-center gap-2">
             <StatusBatch status={b.status} />
             <span>
-              {b.namaFile} terhadap {b.tahapanId?.nama} · {tanggal(b.createdAt, true)}
+              {b.judul ? <b className="text-teks">{b.judul}</b> : b.namaFile}
+              {b.judul ? ` (${b.namaFile})` : ''} terhadap {b.tahapanId?.nama} · {tanggal(b.createdAt, true)}
             </span>
             <Link href="/verifikasi" className="text-utama hover:underline">
-              ← Riwayat
+              ← Verifikasi
             </Link>
           </span>
         }
         aksi={
-          b.status === 'selesai' && !skpd ? (
+          (b.status === 'selesai' || b.status === 'gagal') && !skpd ? (
             <>
-              {boleh(user, 'impor') && <CekUlang batchId={b._id} />}
-              <TautanTombol href={`/api/verifikasi/${b._id}/ekspor`}>Unduh Excel</TautanTombol>
+              {boleh(user, 'impor') && <HapusVerifikasi batchId={b._id} />}
+              {b.status === 'selesai' && boleh(user, 'impor') && <CekUlang batchId={b._id} />}
+              {b.status === 'selesai' && <TautanTombol href={`/api/verifikasi/${b._id}/ekspor`}>Unduh Excel</TautanTombol>}
             </>
           ) : undefined
         }
@@ -156,10 +158,10 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
               <Statistik label="Belum sesuai" nilai={rk.tidakSesuai ?? 0} nada={rk.tidakSesuai ? 'bahaya' : 'aman'} />
               <Statistik
                 label="Total pagu SIPD vs aplikasi"
-                nilai={<Rupiah nilai={rk.totalPaguSipd ?? 0} juta />}
+                nilai={<Rupiah nilai={rk.totalPaguSipd ?? 0} />}
                 sub={
                   <>
-                    aplikasi <Rupiah nilai={rk.totalPaguAplikasi ?? 0} juta />
+                    aplikasi <Rupiah nilai={rk.totalPaguAplikasi ?? 0} />
                   </>
                 }
               />
@@ -267,7 +269,7 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
                   {(r.data as unknown as Hasil[]).map((h) => {
                     const sudah = !!h.tindakLanjut?.selesai;
                     return (
-                      <li key={h._id} className={cx('grid gap-3 px-4 py-3 lg:grid-cols-[auto_1fr_34rem]', sudah && 'bg-latar/50')}>
+                      <li key={h._id} className={cx('grid gap-3 px-4 py-3 lg:grid-cols-[auto_1fr_42rem]', sudah && 'bg-latar/50')}>
                         <div className="pt-0.5">
                           {h.aturan !== 'sesuai' && bolehCentang ? (
                             <CentangSipd batchId={b._id} hasilId={h._id} awal={sudah} label={`${h.kodeSubkegiatan} ${h.namaSubkegiatan}`} />
@@ -318,17 +320,18 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
                             <tbody>
                               {h.verifikasi.baris.map((x) => (
                                 <tr key={x.kodeSumberDana} className={cx(x.selisih !== 0 && !sudah && 'bg-waspada-lembut')}>
-                                  <td className="py-0.5 pr-2" title={x.kodeSumberDana}>
-                                    {nama[x.kodeSumberDana] ?? x.kodeSumberDana}
+                                  <td className="py-0.5 pr-2">
+                                    <span className="font-mono text-xs text-redup">{x.kodeSumberDana}</span>
+                                    {nama[x.kodeSumberDana] && nama[x.kodeSumberDana] !== x.kodeSumberDana ? ` ${nama[x.kodeSumberDana]}` : ''}
                                   </td>
                                   <td className="angka py-0.5 text-right">
-                                    <Rupiah nilai={x.nilaiAplikasi} juta />
+                                    <Rupiah nilai={x.nilaiAplikasi} />
                                   </td>
                                   <td className="angka py-0.5 text-right">
-                                    <Rupiah nilai={x.nilaiSipd} juta />
+                                    <Rupiah nilai={x.nilaiSipd} />
                                   </td>
                                   <td className={cx('angka py-0.5 text-right font-medium', x.selisih === 0 ? 'text-redup' : 'text-bahaya')}>
-                                    {x.selisih === 0 ? '–' : <Rupiah nilai={x.selisih} juta negatifMerah={false} />}
+                                    {x.selisih === 0 ? '–' : <Rupiah nilai={x.selisih} negatifMerah={false} />}
                                   </td>
                                 </tr>
                               ))}

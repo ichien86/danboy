@@ -30,7 +30,7 @@ export default async function Perbedaan({ searchParams }: { searchParams: SP }) 
   const page = num(sp.page, 1);
   const filter = { q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana };
   const r = await daftarPerbedaan(user, String(tahapan._id), { ...filter, page, limit: 50 });
-  const sd = r.sumberDana as Record<string, { nama: string }>;
+  const sd = r.sumberDana as Record<string, { kode: string; nama: string }>;
   const { id: _i, page: _p, ...param } = sp;
   void _i, _p;
   const terbuka = tahapan.status === 'terbuka';
@@ -58,7 +58,7 @@ export default async function Perbedaan({ searchParams }: { searchParams: SP }) 
                 const s = new Map(d.alokasiSipd.map((a) => [String(a.sumberDanaId), a.nilai]));
                 const q = new URLSearchParams(Object.entries({ ...param, page: page > 1 ? String(page) : undefined, id: d._id }).filter(([, v]) => v) as [string, string][]);
                 return (
-                  <li key={d._id} className="grid gap-3 px-4 py-3 lg:grid-cols-[1fr_28rem]">
+                  <li key={d._id} className="grid gap-3 px-4 py-3 lg:grid-cols-[1fr_36rem]">
                     <div>
                       <p className="font-mono text-xs text-redup">{d.kodeSubkegiatan}</p>
                       <p className="font-medium">{d.namaSubkegiatan}</p>
@@ -88,12 +88,20 @@ export default async function Perbedaan({ searchParams }: { searchParams: SP }) 
                           const beda = (t.get(id) ?? 0) !== (s.get(id) ?? 0);
                           return (
                             <tr key={id}>
-                              <td className="py-0.5 pr-2">{sd[id]?.nama ?? id}</td>
-                              <td className={cx('angka py-0.5 text-right', beda && 'bg-waspada-lembut font-semibold')}>
-                                <Rupiah nilai={t.get(id) ?? 0} juta />
+                              <td className="py-0.5 pr-2">
+                                {sd[id] ? (
+                                  <>
+                                    <span className="font-mono text-xs text-redup">{sd[id].kode}</span> {sd[id].nama}
+                                  </>
+                                ) : (
+                                  id
+                                )}
                               </td>
                               <td className={cx('angka py-0.5 text-right', beda && 'bg-waspada-lembut font-semibold')}>
-                                <Rupiah nilai={s.get(id) ?? 0} juta />
+                                <Rupiah nilai={t.get(id) ?? 0} />
+                              </td>
+                              <td className={cx('angka py-0.5 text-right', beda && 'bg-waspada-lembut font-semibold')}>
+                                <Rupiah nilai={s.get(id) ?? 0} />
                               </td>
                             </tr>
                           );

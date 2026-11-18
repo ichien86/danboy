@@ -25,6 +25,7 @@ export const POST = rute(async ({ req, user }) => {
     tahun: Number.isInteger(tahun) ? tahun : undefined,
     versi: ((fd.get('versi') as string) || '').trim().slice(0, 80) || undefined,
     abaikanSumberDana: fd.get('abaikanSumberDana') === '1',
+    judul: ((fd.get('judul') as string) || '').trim().slice(0, 120) || undefined,
     namaFile: file.name.slice(0, 200),
     isi: Buffer.from(await file.arrayBuffer()),
   });

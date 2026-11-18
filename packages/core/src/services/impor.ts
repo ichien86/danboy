@@ -54,6 +54,8 @@ export interface InputUnggah {
   versi?: string;
   /** Impor APBD: hanya pagu per subkegiatan, sumber dana di file diabaikan. */
   abaikanSumberDana?: boolean;
+  /** Verifikasi SIPD: judul proses yang tampil di daftar (bukan nama file). */
+  judul?: string;
   namaFile: string;
   isi: Buffer;
 }
@@ -109,6 +111,7 @@ export async function unggahImpor(user: SessionUser, input: InputUnggah) {
     olehId: oid(user.id),
     ringkasan: input.versi ? { versi: input.versi } : {},
     opsi: { abaikanSumberDana: input.jenis === 'apbd' && !!input.abaikanSumberDana },
+    judul: input.judul?.trim() || null,
   });
   const job = input.jenis === 'apbd' ? 'imporApbd:proses' : input.jenis === 'verifikasi' ? 'verifikasi:proses' : 'imporMaster:proses';
   await tambahJob(job, { batchId: String(batch._id), userId: user.id });

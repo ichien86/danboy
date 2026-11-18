@@ -260,6 +260,8 @@ export interface ImporBatchDoc {
   galat?: string | null; olehId: Id; createdAt: Date; updatedAt: Date; diterapkanPada?: Date | null;
   /** Pilihan saat unggah. abaikanSumberDana: impor APBD hanya mengambil pagu per subkegiatan. */
   opsi?: { abaikanSumberDana?: boolean };
+  /** Judul proses (verifikasi SIPD); tampil menggantikan nama file. */
+  judul?: string | null;
 }
 const batchSchema = new Schema<ImporBatchDoc>(
   {
@@ -277,6 +279,7 @@ const batchSchema = new Schema<ImporBatchDoc>(
     olehId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     diterapkanPada: { type: Date, default: null },
     opsi: { abaikanSumberDana: { type: Boolean, default: false } },
+    judul: { type: String, default: null },
   },
   { ...opsi, minimize: false },
 );

@@ -11,3 +11,4 @@ export const GET = rute<{ batchId: string }>(async ({ user, params, query }) =>
     limit: angka(query.limit, 50),
   }),
 );
+export const DELETE = rute<{ batchId: string }>(async ({ user, params }) => svc.hapusVerifikasi(user, params.batchId));
