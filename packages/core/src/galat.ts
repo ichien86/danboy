@@ -9,6 +9,10 @@ export const KODE_HTTP = {
   FILE_TERLALU_BESAR: 413,
   FORMAT_FILE: 422,
   TAHAPAN_TERKUNCI: 423,
+  /** Modul Hibah dan Bansos: aksi di luar jadwal tahapannya (BR-11). */
+  DI_LUAR_JADWAL: 409,
+  /** Identitas penerima sudah dipakai kartu lain (BR-03); detail berisi ID kartu yang ada. */
+  DUPLIKAT: 409,
   GALAT_SERVER: 500,
 } as const;
 

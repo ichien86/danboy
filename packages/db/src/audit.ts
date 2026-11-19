@@ -33,9 +33,22 @@ export const LogAudit =
   (mongoose.models.LogAudit as mongoose.Model<LogAuditDoc>) || mongoose.model<LogAuditDoc>('LogAudit', logAuditSchema, 'logAudit');
 
 const ABAIKAN = new Set(['updatedAt', 'createdAt', 'passwordHash', 'totpSecret']);
+/** Field rahasia di dalam dokumen (NIK terenkripsi, sidik HMAC, token Google): nilainya tidak pernah masuk log. */
+const RAHASIA = new Set(['sandi', 'sidik', 'tokenTerenkripsi', 'sidikIdentitas']);
+
+function samarkan(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(samarkan);
+  if (v && typeof v === 'object' && !(v instanceof Date) && !('_bsontype' in (v as object))) {
+    return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, RAHASIA.has(k) && x ? '(rahasia)' : samarkan(x)]));
+  }
+  return v;
+}
 
 /** Hanya field yang berubah; rahasia tidak pernah dicatat. */
-export function selisih(a: Record<string, unknown> | null | undefined, b: Record<string, unknown> | null | undefined) {
+export function selisih(a0: Record<string, unknown> | null | undefined, b0: Record<string, unknown> | null | undefined) {
+  // rahasia dibandingkan dari nilai asli agar perubahannya tetap tercatat sebagai "(diubah)"
+  const a = samarkan(a0) as Record<string, unknown> | null | undefined;
+  const b = samarkan(b0) as Record<string, unknown> | null | undefined;
   const sebelum: Record<string, unknown> = {};
   const sesudah: Record<string, unknown> = {};
   const kunci = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})]);
@@ -46,6 +59,9 @@ export function selisih(a: Record<string, unknown> | null | undefined, b: Record
     if (JSON.stringify(va) !== JSON.stringify(vb)) {
       sebelum[k] = va;
       sesudah[k] = vb;
+    } else if (JSON.stringify(a0?.[k]) !== JSON.stringify(b0?.[k])) {
+      // yang berubah hanya isi rahasia (mis. NIK diganti): catat bahwa berubah tanpa nilainya
+      sesudah[k] = '(rahasia diubah)';
     }
   }
   if ((a && 'passwordHash' in a) || (b && 'passwordHash' in b)) {

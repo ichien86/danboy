@@ -7,3 +7,4 @@ export * from './rekap';
 export * from './nomenklatur';
 export * from './tahapan';
 export * from './verifikasi';
+export * from './hibah';

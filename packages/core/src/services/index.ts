@@ -10,4 +10,5 @@ export * from './pengguna';
 export * from './laporan';
 export * from './verifikasi';
 export * from './lengkapi';
+export * from '../hibah/services';
 export { denganKonteks, sambung, putus } from '@danboy/db';

@@ -19,9 +19,11 @@
     "akun:reset": "tsx scripts/reset-sandi.ts",
     "data:pindah": "tsx scripts/pindah-data.ts",
     "data:awal": "tsx scripts/impor-data-awal.ts",
-    "fixtures": "tsx scripts/buat-fixture.ts"
+    "fixtures": "tsx scripts/buat-fixture.ts",
+    "hibah:seed": "tsx scripts/hibah-seed.ts"
   },
   "devDependencies": {
+    "@danboy/cetak": "workspace:^",
     "@types/node": "^22.10.0",
     "dotenv": "^16.4.7",
     "mongodb-memory-server": "^10.1.4",
@@ -37,6 +39,12 @@
     "@danboy/schema": "workspace:*"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["mongodb-memory-server", "esbuild", "sharp", "@node-rs/argon2", "msgpackr-extract"]
+    "onlyBuiltDependencies": [
+      "mongodb-memory-server",
+      "esbuild",
+      "sharp",
+      "@node-rs/argon2",
+      "msgpackr-extract"
+    ]
   }
 }

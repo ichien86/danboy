@@ -231,4 +231,5 @@ export type TahapanInput = z.infer<typeof tahapanInput>;
 export type PenggunaInput = z.infer<typeof penggunaInput>;
 export type FilterSubkegiatan = z.infer<typeof filterSubkegiatan>;
 export type SubkegiatanBaru = z.infer<typeof subkegiatanBaru>;
+export * from './hibah';
 export { z };

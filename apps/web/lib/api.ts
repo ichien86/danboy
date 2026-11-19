@@ -63,11 +63,14 @@ export const angka = (v: string | undefined, bawaan?: number) => {
   return Number.isFinite(n) ? n : bawaan;
 };
 
-export function unduh(namaFile: string, isi: Buffer) {
+export function unduh(namaFile: string, isi: Buffer, opsi: { mime?: string; inline?: boolean } = {}) {
+  const mime =
+    opsi.mime ?? (namaFile.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   return new Response(new Uint8Array(isi), {
     headers: {
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="${namaFile.replace(/"/g, '')}"`,
+      'Content-Type': mime,
+      // nama berkas ASCII untuk peramban lama, nama asli (UTF-8) lewat filename*
+      'Content-Disposition': `${opsi.inline ? 'inline' : 'attachment'}; filename="${namaFile.replace(/[^\x20-\x7e]|["\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(namaFile)}`,
       'Cache-Control': 'no-store',
     },
   });

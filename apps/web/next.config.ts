@@ -33,8 +33,8 @@ const config: NextConfig = {
   // standalone hanya untuk image Docker (Linux); di Windows pembuatan symlink-nya butuh hak khusus
   output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
   poweredByHeader: false,
-  transpilePackages: ['@danboy/core', '@danboy/db', '@danboy/schema', '@danboy/excel'],
-  serverExternalPackages: ['mongoose', 'mongodb', '@node-rs/argon2', 'bullmq', 'exceljs', 'ioredis'],
+  transpilePackages: ['@danboy/core', '@danboy/db', '@danboy/schema', '@danboy/excel', '@danboy/cetak'],
+  serverExternalPackages: ['mongoose', 'mongodb', '@node-rs/argon2', 'bullmq', 'exceljs', 'ioredis', 'docxtemplater', 'pizzip'],
   experimental: { serverActions: { bodySizeLimit: '2mb' } },
   outputFileTracingRoot: path.resolve(process.cwd(), '../..'),
   async headers() {
