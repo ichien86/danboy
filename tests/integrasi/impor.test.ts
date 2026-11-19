@@ -518,8 +518,11 @@ describe('alur impor end-to-end (service + model)', () => {
     const tid = String(t._id);
     const bidang = (await svc.daftarBidangUrusan(admin))[0];
     const kode = `${bidang.kode}.01.2.02.0001`;
+    // calonSubkegiatan dengan { kode } mengembalikan info subkegiatan (bukan daftar hasil cari { q })
+    type InfoKode = Extract<Awaited<ReturnType<typeof svc.calonSubkegiatan>>, { sudahAda: string[] }>;
+    const infoKode = async (k: string) => (await svc.calonSubkegiatan(admin, tid, { kode: k })) as InfoKode;
     // sub unit yang belum memiliki subkegiatan ini (tidak menghapus data langsung agar notifikasi tetap konsisten)
-    const adaDi = (await svc.calonSubkegiatan(admin, tid, { kode })).sudahAda;
+    const adaDi = (await infoKode(kode)).sudahAda;
     const subUnit = (await SubUnit.find().sort({ kode: 1 }).lean()).find((u) => !adaDi.includes(String(u._id)))!;
     expect(bidang.kode).not.toMatch(/^X/);
     expect(await Nomenklatur.exists({ kode: bidang.kode, jenis: 'bidang' })).toBeTruthy();
@@ -544,11 +547,11 @@ describe('alur impor end-to-end (service + model)', () => {
     expect(String(r.dokumen.skpdId)).toBe(String(subUnit.skpdId));
     // ganda pada sub unit yang sama ditolak
     await expect(svc.tambahSubkegiatan(admin, tid, masukan)).rejects.toMatchObject({ http: 400 });
-    expect((await svc.calonSubkegiatan(admin, tid, { kode })).sudahAda).toContain(String(subUnit._id));
+    expect((await infoKode(kode)).sudahAda).toContain(String(subUnit._id));
 
     // subkegiatan yang ditagging: info tagging ikut dikembalikan; sumber dana awal mengisi seluruh pagu
     const sg = (await SumberDana.findOne({ namaTagging: 'DAU SG Pendidikan' }).lean())!;
-    const info = await svc.calonSubkegiatan(admin, tid, { kode: '1.01.02.2.02.0025' });
+    const info = await infoKode('1.01.02.2.02.0025');
     expect(info.tagging.map((x) => x.sumberDanaId)).toContain(String(sg._id));
     const bebas = (await SubUnit.find().sort({ kode: 1 }).lean()).find((u) => !info.sudahAda.includes(String(u._id)))!;
     const r2 = await svc.tambahSubkegiatan(admin, tid, { subUnitId: String(bebas._id), kodeNomenklatur: '1.01.02.2.02.0025', pagu: 7_000_000, sumberDanaId: String(sg._id) });
