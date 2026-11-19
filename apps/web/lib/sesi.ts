@@ -19,8 +19,9 @@ export const ambilSesi = cache(async (): Promise<SessionUser | null> => {
     id: s.user.id,
     username: s.user.username,
     nama: u.nama,
-    peran: u.peran,
+    peran: u.peran ?? null,
     skpdId: u.skpdId ? String(u.skpdId) : null,
+    aksesHibah: u.aksesHibah ?? null,
   };
 });
 

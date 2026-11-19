@@ -505,6 +505,30 @@ describe('alur impor end-to-end (service + model)', () => {
     }
   });
 
+  it('akses modul Hibah dan Bansos: Admin Perencana tanpa DANBOY, akun SKPD otomatis Operator PD', async () => {
+    const { Skpd } = await import('@danboy/db');
+    const skpd = await Skpd.findOne().lean();
+    // Admin Perencana: hanya modul Hibah dan Bansos
+    const r = await svc.buatPengguna(sa, { username: 'perencana1', nama: 'Admin Perencana', peran: null, aksesHibah: 'admin_perencana' });
+    const id = String((r.pengguna as { _id: unknown })._id);
+    const st = await svc.statusPengguna(id);
+    expect(st).toMatchObject({ peran: null, aksesHibah: 'admin_perencana' });
+    const masuk = await svc.verifikasiLogin('perencana1', r.sandiSementara);
+    expect(masuk.user).toMatchObject({ peran: null, aksesHibah: 'admin_perencana' });
+    // akun tanpa peran DANBOY ditolak layanan DANBOY
+    await expect(svc.daftarSubkegiatan({ ...masuk.user!, peran: null }, tahapanId, {})).rejects.toMatchObject({ kode: 'TIDAK_BERHAK' });
+    // minimal satu akses wajib ada
+    await expect(svc.ubahPengguna(sa, id, { aksesHibah: null })).rejects.toMatchObject({ kode: 'VALIDASI' });
+    // menambah akses DANBOY tanpa menghapus akses modul
+    expect(await svc.ubahPengguna(sa, id, { peran: 'admin' })).toMatchObject({ peran: 'admin', aksesHibah: 'admin_perencana' });
+    // akun SKPD tidak menyimpan aksesHibah; perannya di modul diturunkan
+    const s = await svc.buatPengguna(sa, { username: 'opd1', nama: 'Operator PD', peran: 'skpd', skpdId: String(skpd!._id), aksesHibah: null });
+    const sid = String((s.pengguna as { _id: unknown })._id);
+    expect(await svc.ubahPengguna(sa, sid, { aksesHibah: 'verifikator' })).toMatchObject({ peran: 'skpd', aksesHibah: null });
+    // menurunkan peran sendiri tetap ditolak, termasuk menghapus akses DANBOY
+    await expect(svc.ubahPengguna(sa, sa.id, { peran: null, aksesHibah: 'admin_perencana' })).rejects.toMatchObject({ kode: 'VALIDASI' });
+  });
+
   it('ekspor Excel menghasilkan file xlsx', async () => {
     const e = await svc.ekspor(admin, 'matriks', tahapanId);
     expect(e.isi.readUInt32LE(0)).toBe(0x04034b50);

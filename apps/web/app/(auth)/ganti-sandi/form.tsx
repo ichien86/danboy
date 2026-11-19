@@ -51,7 +51,7 @@ export function FormGantiSandi({ wajib }: { wajib: boolean }) {
         try {
           await api('/api/akun/ganti-sandi', { body: data });
           await tandaiSandiDiganti();
-          router.replace('/dasbor');
+          router.replace('/');
           router.refresh();
         } catch (err) {
           if (err instanceof GalatApi && err.detail) setGalat(err.detail);

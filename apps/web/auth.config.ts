@@ -6,7 +6,8 @@ declare module 'next-auth' {
     id?: string;
     username?: string;
     nama?: string;
-    peran?: Peran;
+    peran?: Peran | null;
+    aksesHibah?: string | null;
     skpdId?: string | null;
     wajibGantiSandi?: boolean;
   }
@@ -15,7 +16,7 @@ declare module 'next-auth' {
       id: string;
       username: string;
       nama: string;
-      peran: Peran;
+      peran: Peran | null;
       skpdId: string | null;
       wajibGantiSandi: boolean;
       name?: string | null;
@@ -37,7 +38,7 @@ export const authConfig = {
         token.id = user.id;
         token.username = user.username;
         token.nama = user.nama;
-        token.peran = user.peran;
+        token.peran = user.peran ?? null;
         token.skpdId = user.skpdId ?? null;
         token.wajibGantiSandi = !!user.wajibGantiSandi;
       }
@@ -52,7 +53,7 @@ export const authConfig = {
         id: token.id as string,
         username: token.username as string,
         nama: token.nama as string,
-        peran: token.peran as Peran,
+        peran: (token.peran as Peran | null) ?? null,
         skpdId: (token.skpdId as string | null) ?? null,
         wajibGantiSandi: !!token.wajibGantiSandi,
       };

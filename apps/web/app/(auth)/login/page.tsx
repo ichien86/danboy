@@ -5,7 +5,7 @@ export const metadata: Metadata = { title: 'Masuk' };
 
 export default async function HalamanMasuk({ searchParams }: { searchParams: Promise<{ lanjut?: string }> }) {
   const { lanjut } = await searchParams;
-  const aman = lanjut && lanjut.startsWith('/') && !lanjut.startsWith('//') ? lanjut : '/dasbor';
+  const aman = lanjut && lanjut.startsWith('/') && !lanjut.startsWith('//') ? lanjut : '/';
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">

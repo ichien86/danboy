@@ -77,8 +77,9 @@ export async function verifikasiLogin(username: string, password: string, ip?: s
       id: String(u._id),
       username: u.username,
       nama: u.nama,
-      peran: u.peran,
+      peran: u.peran ?? null,
       skpdId: u.skpdId ? String(u.skpdId) : null,
+      aksesHibah: u.aksesHibah ?? null,
       wajibGantiSandi: u.wajibGantiSandi,
     },
   };
@@ -121,6 +122,8 @@ export async function buatPengguna(user: SessionUser, input: z.infer<typeof S.pe
     nama: input.nama,
     peran: input.peran,
     skpdId: input.peran === 'skpd' ? oid(input.skpdId) : null,
+    // akun SKPD tidak menyimpan aksesHibah: perannya di modul diturunkan (Operator PD)
+    aksesHibah: input.peran === 'skpd' ? null : (input.aksesHibah ?? null),
     passwordHash: await hashSandi(sandi),
     wajibGantiSandi: true,
   }).catch((e) => {
@@ -136,14 +139,18 @@ export async function ubahPengguna(user: SessionUser, id: string, input: z.infer
   pastikanBoleh(user, 'kelola_pengguna');
   await sambung();
   const _id = oid(pastikanId(id, 'Pengguna'));
-  if (String(_id) === user.id && (input.aktif === false || (input.peran && input.peran !== 'super_admin')))
+  if (String(_id) === user.id && (input.aktif === false || (input.peran !== undefined && input.peran !== 'super_admin')))
     throw new Galat('VALIDASI', 'Tidak bisa menonaktifkan atau menurunkan peran akun sendiri');
   const lama = await User.findById(_id).lean<UserDoc>();
   if (!lama) throw tidakDitemukan('Pengguna');
-  const peran = input.peran ?? lama.peran;
+  const peran = input.peran !== undefined ? input.peran : (lama.peran ?? null);
   const skpdId = input.skpdId !== undefined ? input.skpdId : lama.skpdId ? String(lama.skpdId) : null;
+  // akun SKPD tidak menyimpan aksesHibah: otomatis Operator PD
+  const aksesHibah = peran === 'skpd' ? null : input.aksesHibah !== undefined ? input.aksesHibah : (lama.aksesHibah ?? null);
   if (peran === 'skpd' && !skpdId) throw new Galat('VALIDASI', 'Akun SKPD wajib memilih SKPD', { skpdId: 'Wajib diisi' });
-  const set: Record<string, unknown> = { ...input, skpdId: peran === 'skpd' && skpdId ? oid(skpdId) : null };
+  if (!peran && !aksesHibah)
+    throw new Galat('VALIDASI', 'Pilih minimal satu akses: DANBOY atau Hibah dan Bansos', { peran: 'Pilih minimal satu akses' });
+  const set: Record<string, unknown> = { ...input, peran, aksesHibah, skpdId: peran === 'skpd' && skpdId ? oid(skpdId) : null };
   const d = await User.findOneAndUpdate({ _id }, { $set: set }, { new: true }).populate('skpdId', 'kode nama').lean();
   return ser(d);
 }
@@ -165,5 +172,5 @@ export async function resetSandi(user: SessionUser, id: string) {
 export async function statusPengguna(id: string) {
   await sambung();
   if (!/^[0-9a-f]{24}$/i.test(id)) return null;
-  return User.findById(id).select('aktif wajibGantiSandi peran skpdId nama').lean<UserDoc>();
+  return User.findById(id).select('aktif wajibGantiSandi peran skpdId aksesHibah nama').lean<UserDoc>();
 }

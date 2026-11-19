@@ -1,30 +1,24 @@
 import { Suspense } from 'react';
-import { boleh, LABEL_PERAN } from '@danboy/core';
+import { redirect } from 'next/navigation';
 import { hitungNotifikasiTerbuka } from '@danboy/core/services';
 import { semuaTahapan, tahapanAktif, wajibSesi } from '@/lib/sesi';
+import { kerangkaModul, MODUL } from '@/lib/menu';
 import { LoncengNotifikasi, PemilihTahapan, PencarianCepat, TombolTema } from '@/components/klien';
-import { Kerangka } from './kerangka';
+import { Kerangka } from '@/components/kerangka';
 
 export const dynamic = 'force-dynamic';
 
-
 export default async function LayoutAplikasi({ children }: { children: React.ReactNode }) {
-  // sesi dan daftar tahapan dibaca bersamaan; halaman memakai hasil yang sama (cache per permintaan)
-  const [user, semua, aktif] = await Promise.all([wajibSesi(), semuaTahapan(), tahapanAktif()]);
+  const user = await wajibSesi();
+  // akun tanpa peran DANBOY (mis. Admin Perencana) hanya memakai modul Hibah dan Bansos
+  if (!user.peran) redirect(MODUL.hibah.href);
+  // daftar tahapan dibaca bersamaan; halaman memakai hasil yang sama (cache per permintaan)
+  const [semua, aktif] = await Promise.all([semuaTahapan(), tahapanAktif()]);
   const notif = aktif ? await hitungNotifikasiTerbuka(user, String(aktif._id)) : { total: 0, kritis: 0 };
   const opsi = semua.map((t) => ({ _id: String(t._id), nama: t.nama, tahun: t.tahun, status: t.status }));
-  const menu = {
-    rekap: user.peran !== 'skpd',
-    perbedaan: boleh(user, 'lihat_perbedaan'),
-    master: user.peran !== 'skpd',
-    tahapan: boleh(user, 'kelola_tahapan'),
-    pengguna: boleh(user, 'kelola_pengguna'),
-    audit: boleh(user, 'lihat_audit'),
-  };
   return (
     <Kerangka
-      menu={menu}
-      pengguna={{ nama: user.nama, peran: LABEL_PERAN[user.peran] }}
+      {...kerangkaModul(user, 'danboy')}
       bilah={
         <>
           <Suspense>

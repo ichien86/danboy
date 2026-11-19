@@ -31,11 +31,13 @@ export function FormPengguna({
   diriSendiri,
 }: {
   skpd: { _id: string; nama: string }[];
-  awal?: { _id: string; username: string; nama: string; peran: string; skpdId: string; aktif: boolean };
+  awal?: { _id: string; username: string; nama: string; peran: string | null; skpdId: string; aksesHibah: string | null; aktif: boolean };
   diriSendiri?: boolean;
 }) {
   const [buka, setBuka] = useState(false);
-  const [peran, setPeran] = useState(awal?.peran ?? 'skpd');
+  // '' = tanpa akses DANBOY / tanpa akses modul Hibah dan Bansos
+  const [peran, setPeran] = useState(awal ? (awal.peran ?? '') : 'skpd');
+  const [aksesHibah, setAksesHibah] = useState(awal?.aksesHibah ?? '');
   const [galat, setGalat] = useState<Record<string, string>>({});
   const [umum, setUmum] = useState('');
   const [sandi, setSandi] = useState('');
@@ -70,8 +72,9 @@ export function FormPengguna({
               const fd = new FormData(e.currentTarget);
               const body: Record<string, unknown> = {
                 nama: String(fd.get('nama')).trim(),
-                peran,
+                peran: peran || null,
                 skpdId: peran === 'skpd' ? String(fd.get('skpdId') || '') || null : null,
+                aksesHibah: peran === 'skpd' ? null : aksesHibah || null,
               };
               if (!awal) body.username = String(fd.get('username')).trim();
               else body.aktif = fd.get('aktif') === 'on';
@@ -101,8 +104,9 @@ export function FormPengguna({
             <Bidang label="Nama" htmlFor="nama" galat={galat.nama}>
               <Masukan id="nama" name="nama" defaultValue={awal?.nama} required />
             </Bidang>
-            <Bidang label="Peran" htmlFor="peran">
+            <Bidang label="Akses DANBOY" htmlFor="peran" galat={galat.peran}>
               <Pilihan id="peran" value={peran} onChange={(e) => setPeran(e.target.value)} disabled={diriSendiri}>
+                <option value="">Tidak ada</option>
                 <option value="super_admin">Super Admin</option>
                 <option value="admin">Admin Keuangan</option>
                 <option value="skpd">SKPD</option>
@@ -120,6 +124,25 @@ export function FormPengguna({
                 </Pilihan>
               </Bidang>
             )}
+            <Bidang
+              label="Akses Hibah dan Bansos"
+              htmlFor="aksesHibah"
+              galat={galat.aksesHibah}
+              bantuan={peran === 'skpd' ? 'Akun SKPD otomatis menjadi Operator PD untuk SKPD-nya.' : undefined}
+            >
+              <Pilihan id="aksesHibah" value={peran === 'skpd' ? 'operator_pd' : aksesHibah} onChange={(e) => setAksesHibah(e.target.value)} disabled={peran === 'skpd'}>
+                {peran === 'skpd' ? (
+                  <option value="operator_pd">Operator PD</option>
+                ) : (
+                  <>
+                    <option value="">Tidak ada</option>
+                    <option value="admin_perencana">Admin Perencana</option>
+                    <option value="verifikator">Verifikator TAPD</option>
+                    <option value="anggota">Anggota TAPD</option>
+                  </>
+                )}
+              </Pilihan>
+            </Bidang>
             {awal && (
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="aktif" defaultChecked={awal.aktif} disabled={diriSendiri} /> Aktif

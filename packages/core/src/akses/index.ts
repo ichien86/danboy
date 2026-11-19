@@ -1,4 +1,7 @@
 import { Galat } from '../galat';
+import type { AksesHibah } from './hibah';
+
+export * from './hibah';
 
 export type Peran = 'super_admin' | 'admin' | 'skpd';
 
@@ -6,8 +9,11 @@ export interface SessionUser {
   id: string;
   username: string;
   nama: string;
-  peran: Peran;
+  /** Peran di DANBOY; null = akun tanpa akses DANBOY (mis. Admin Perencana yang hanya memakai modul Hibah dan Bansos). */
+  peran: Peran | null;
   skpdId?: string | null;
+  /** Peran di modul Hibah dan Bansos untuk akun non-SKPD; akun SKPD otomatis Operator PD. */
+  aksesHibah?: AksesHibah | null;
 }
 
 export type Aksi =
@@ -47,7 +53,7 @@ const MATRIKS: Record<Aksi, readonly Peran[]> = {
 };
 
 export function boleh(user: Pick<SessionUser, 'peran'> | null | undefined, aksi: Aksi): boolean {
-  return !!user && MATRIKS[aksi].includes(user.peran);
+  return !!user?.peran && MATRIKS[aksi].includes(user.peran);
 }
 
 export function pastikanBoleh(user: SessionUser | null | undefined, aksi: Aksi): asserts user is SessionUser {
@@ -60,6 +66,8 @@ export function pastikanBoleh(user: SessionUser | null | undefined, aksi: Aksi):
  * Akun SKPD otomatis mencakup semua sub unit di bawah SKPD-nya.
  */
 export function cakupan(user: SessionUser): { skpdId?: string } {
+  // akun tanpa peran DANBOY tidak boleh mendapat cakupan "semua"
+  if (!user.peran) throw new Galat('TIDAK_BERHAK', 'Akun tidak punya akses DANBOY');
   if (user.peran === 'skpd') {
     if (!user.skpdId) throw new Galat('TIDAK_BERHAK', 'Akun SKPD belum terhubung ke SKPD');
     return { skpdId: user.skpdId };
@@ -69,7 +77,7 @@ export function cakupan(user: SessionUser): { skpdId?: string } {
 
 /** Untuk akses dokumen tunggal: dokumen di luar cakupan diperlakukan sebagai tidak ada (404, bukan 403). */
 export function dalamCakupan(user: SessionUser, dok: { skpdId?: unknown } | null | undefined): boolean {
-  if (!dok) return false;
+  if (!dok || !user.peran) return false;
   if (user.peran !== 'skpd') return true;
   return String(dok.skpdId) === String(user.skpdId);
 }

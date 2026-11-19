@@ -6,6 +6,8 @@ export const uang = z.number().int().nonnegative();
 export const objectId = z.string().regex(/^[0-9a-f]{24}$/i, 'ID tidak valid');
 
 export const peran = z.enum(['super_admin', 'admin', 'skpd']);
+/** Peran modul Hibah dan Bansos yang disimpan di akun; Operator PD diturunkan dari akun SKPD. */
+export const aksesHibah = z.enum(['admin_perencana', 'verifikator', 'anggota']);
 export const jenisTahapan = z.enum(['KUA_PPAS', 'RAPBD', 'APBD', 'PERGESERAN', 'PERUBAHAN']);
 export const jenisImpor = z.enum(['apbd', 'nomenklatur', 'sumber_dana', 'rekening', 'tagging', 'verifikasi', 'skpd']);
 
@@ -99,17 +101,24 @@ export const penggunaInput = z
       .max(64)
       .regex(/^[a-zA-Z0-9._-]+$/, 'Hanya huruf, angka, titik, garis bawah, strip'),
     nama: z.string().trim().min(1).max(200),
-    peran,
+    peran: peran.nullable(),
     skpdId: objectId.optional().nullable(),
+    aksesHibah: aksesHibah.optional().nullable(),
   })
   .strict()
-  .refine((v) => v.peran !== 'skpd' || !!v.skpdId, { message: 'Akun SKPD wajib memilih SKPD', path: ['skpdId'] });
+  .refine((v) => v.peran !== 'skpd' || !!v.skpdId, { message: 'Akun SKPD wajib memilih SKPD', path: ['skpdId'] })
+  .refine((v) => !!v.peran || !!v.aksesHibah, { message: 'Pilih minimal satu akses: DANBOY atau Hibah dan Bansos', path: ['peran'] })
+  .refine((v) => v.peran !== 'skpd' || !v.aksesHibah, {
+    message: 'Akun SKPD otomatis menjadi Operator PD di modul Hibah dan Bansos',
+    path: ['aksesHibah'],
+  });
 
 export const penggunaUbah = z
   .object({
     nama: z.string().trim().min(1).max(200).optional(),
-    peran: peran.optional(),
+    peran: peran.optional().nullable(),
     skpdId: objectId.optional().nullable(),
+    aksesHibah: aksesHibah.optional().nullable(),
     aktif: z.boolean().optional(),
   })
   .strict();

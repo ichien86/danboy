@@ -298,9 +298,10 @@ export function PintasanCari() {
 
 /* ---------- Navigasi aktif ---------- */
 
-export function TautanNav({ href, children, ikon }: { href: string; children: ReactNode; ikon: ReactNode }) {
+/** `tepat`: aktif hanya pada alamat itu sendiri (untuk dashboard modul yang menjadi awalan halaman lain). */
+export function TautanNav({ href, children, ikon, tepat }: { href: string; children: ReactNode; ikon: ReactNode; tepat?: boolean }) {
   const path = usePathname();
-  const aktif = path === href || path.startsWith(href + '/');
+  const aktif = path === href || (!tepat && path.startsWith(href + '/'));
   return (
     <Link
       href={href}

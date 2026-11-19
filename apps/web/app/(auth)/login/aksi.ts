@@ -9,8 +9,8 @@ import { signIn } from '@/auth';
  * (mis. Netlify) dan bisa berujung "An unexpected response was received from the server".
  */
 export async function masuk(_: { galat: string; ke?: string }, fd: FormData): Promise<{ galat: string; ke?: string }> {
-  const lanjut = String(fd.get('lanjut') ?? '/dasbor');
-  const ke = lanjut.startsWith('/') && !lanjut.startsWith('//') ? lanjut : '/dasbor';
+  const lanjut = String(fd.get('lanjut') ?? '/');
+  const ke = lanjut.startsWith('/') && !lanjut.startsWith('//') ? lanjut : '/';
   try {
     await signIn('credentials', {
       username: String(fd.get('username') ?? ''),

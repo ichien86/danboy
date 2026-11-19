@@ -33,8 +33,11 @@ aud(subUnitSchema, 'subUnit');
 export const SubUnit = buat('SubUnit', subUnitSchema, 'subUnit');
 
 export type Peran = 'super_admin' | 'admin' | 'skpd';
+export type AksesHibah = 'admin_perencana' | 'verifikator' | 'anggota';
 export interface UserDoc {
-  _id: Id; username: string; nama: string; passwordHash: string; peran: Peran; skpdId?: Id | null;
+  /** peran null = akun tanpa akses DANBOY; aksesHibah = peran di modul Hibah dan Bansos (akun SKPD otomatis Operator PD). */
+  _id: Id; username: string; nama: string; passwordHash: string; peran: Peran | null; skpdId?: Id | null;
+  aksesHibah?: AksesHibah | null;
   wajibGantiSandi: boolean; gagalLogin: number; terkunciSampai?: Date | null; totpSecret?: string;
   aktif: boolean; createdAt: Date; updatedAt: Date;
 }
@@ -43,7 +46,8 @@ const userSchema = new Schema<UserDoc>(
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     nama: { type: String, required: true },
     passwordHash: { type: String, required: true, select: false },
-    peran: { type: String, enum: ['super_admin', 'admin', 'skpd'], required: true },
+    peran: { type: String, enum: ['super_admin', 'admin', 'skpd', null], default: null },
+    aksesHibah: { type: String, enum: ['admin_perencana', 'verifikator', 'anggota', null], default: null },
     skpdId: { type: Schema.Types.ObjectId, ref: 'Skpd', default: null },
     wajibGantiSandi: { type: Boolean, default: true },
     gagalLogin: { type: Number, default: 0 },

@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authConfig } from './auth.config';
+import { COOKIE_MODUL, modulDariAlamat } from './lib/cookie-modul';
 
 const { auth } = NextAuth(authConfig);
 
@@ -24,7 +25,7 @@ export default auth((req) => {
 
   if (PUBLIK.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
     // hanya saat membuka halaman; kiriman form login (server action, POST) tidak dibelokkan walau masih ada sesi lama
-    if (pathname === '/login' && req.method === 'GET' && req.auth) return NextResponse.redirect(new URL('/dasbor', req.url));
+    if (pathname === '/login' && req.method === 'GET' && req.auth) return NextResponse.redirect(new URL('/', req.url));
     return NextResponse.next();
   }
   if (!req.auth) {
@@ -37,7 +38,13 @@ export default auth((req) => {
     if (api) return galat(403, 'TIDAK_BERHAK', 'Ganti kata sandi terlebih dahulu');
     return NextResponse.redirect(new URL('/ganti-sandi', req.url));
   }
-  return NextResponse.next();
+  // ingat modul terakhir yang dibuka (pemilih modul); hak akses tetap dicek di layout tiap modul
+  const modul = api ? null : modulDariAlamat(pathname);
+  const res = NextResponse.next();
+  if (modul && req.cookies.get(COOKIE_MODUL)?.value !== modul) {
+    res.cookies.set(COOKIE_MODUL, modul, { path: '/', sameSite: 'lax', httpOnly: true, secure: req.nextUrl.protocol === 'https:', maxAge: 365 * 24 * 60 * 60 });
+  }
+  return res;
 });
 
 export const config = {
