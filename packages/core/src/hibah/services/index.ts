@@ -9,3 +9,4 @@ export * from './impor';
 export * from './laporan';
 export { aturPenyimpanan, PenyimpananMemori, sambungDrive, urlOauth, penyimpanan, type PenyimpananBerkas } from '../drive';
 export { muatDataAwalHibah } from '../data-awal';
+export * from './drive';

@@ -75,3 +75,28 @@ export function unduh(namaFile: string, isi: Buffer, opsi: { mime?: string; inli
     },
   });
 }
+
+/** Baca form multipart dengan batas ukuran total; melempar galat seragam bila tidak valid. */
+export async function bacaForm(req: NextRequest, batasMb = 6): Promise<FormData> {
+  const panjang = Number(req.headers.get('content-length') ?? 0);
+  if (panjang > batasMb * 1024 * 1024 + 64 * 1024) throw new Galat('FILE_TERLALU_BESAR', `Ukuran unggahan melebihi ${batasMb} MB`);
+  return req.formData().catch(() => {
+    throw new Galat('VALIDASI', 'Form unggahan tidak valid');
+  });
+}
+
+/** Berkas dari form sebagai { nama, isi }, atau null bila tidak diisi. */
+export async function berkasDari(fd: FormData, nama: string): Promise<{ nama: string; isi: Buffer } | null> {
+  const f = fd.get(nama);
+  if (!(f instanceof File) || f.size === 0) return null;
+  return { nama: f.name.slice(0, 200), isi: Buffer.from(await f.arrayBuffer()) };
+}
+
+/** Isian JSON di dalam form multipart (field "data"). */
+export function jsonDariForm(fd: FormData, kunci = 'data'): unknown {
+  try {
+    return JSON.parse(String(fd.get(kunci) ?? '{}'));
+  } catch {
+    throw new Galat('VALIDASI', 'Data formulir tidak valid');
+  }
+}

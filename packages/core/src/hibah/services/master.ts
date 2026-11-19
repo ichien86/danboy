@@ -168,3 +168,14 @@ export async function unduhTemplat(user: SessionUser, jenis: JenisTemplat, bawaa
 /** Contoh hasil pengisian templat (untuk pratinjau setelah unggah). */
 export const contohTemplat = (jenis: JenisTemplat, isi: Buffer) => isiTemplat(isi, CONTOH[jenis]);
 export { hapusFile };
+
+/** Berkas wajib aktif untuk satu jenis penerima (label dan pilihan unggah; semua peran modul). */
+export async function berkasWajibUntuk(user: SessionUser, jenisPenerimaKode: string, tingkat?: 'penerima' | 'usulan') {
+  pastikanBolehHibah(user, 'hibah_lihat_rekap');
+  await sambung();
+  return ser(
+    await HibahBerkasWajib.find({ aktif: true, jenisPenerimaKode: { $in: [jenisPenerimaKode, '*'] }, ...(tingkat ? { tingkat } : {}) })
+      .sort({ kode: 1 })
+      .lean(),
+  );
+}

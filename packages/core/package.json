@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./services": "./src/services/index.ts",
-    "./jobs": "./src/jobs/index.ts"
+    "./jobs": "./src/jobs/index.ts",
+    "./hibah": "./src/hibah/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

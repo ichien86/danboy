@@ -54,6 +54,10 @@ localhost lalu klik **Proses ulang**.
    | `SANDI_AWAL` | sandi awal akun baru/reset (sama dengan di `.env` lokal, atau kosongkan untuk sandi acak) |
    | `AMBANG_MENDEKATI_PERSEN` | `90` |
    | `UPLOAD_MAX_MB` | `5` (Netlify membatasi ukuran permintaan ±6 MB; impor tetap dari localhost) |
+   | `KUNCI_ENKRIPSI`, `KUNCI_SIDIK` | modul Hibah dan Bansos: **sama persis** dengan di `.env` lokal (dibuat sekali dengan `pnpm hibah:seed --kunci`) |
+   | `CRON_SECRET` | rahasia acak; dipakai fungsi terjadwal `kirim-berkas` (setiap 5 menit) |
+   | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | klien OAuth Google Cloud (Web application); aplikasi OAuth berstatus **In production** |
+   | `GOOGLE_REDIRECT_URI` | `https://<situs>.netlify.app/api/hibah/drive/oauth/callback` (daftarkan juga di Google Cloud) |
 
    Jangan isi `TZ` (dicadangkan oleh lingkungan Netlify); tanggal di aplikasi sudah selalu ditampilkan dalam WIB.
    Jangan isi `REDIS_URL`.
@@ -76,3 +80,17 @@ Bila login gagal dengan galat server, buka **Netlify → Logs → Functions** da
 - **Netlify**: setiap `git push` ke `main` otomatis membangun dan memasang versi baru.
 - Nama situs bisa diganti di **Site configuration → Change site name**, atau pasang domain sendiri di **Domain management**.
   Setelah itu ubah `AUTH_URL` lalu **Deploys → Trigger deploy**.
+
+## 5. Modul Hibah dan Bansos
+
+1. Buat kunci sekali: `pnpm hibah:seed --kunci`, lalu salin `KUNCI_ENKRIPSI`, `KUNCI_SIDIK`, dan `CRON_SECRET` ke `.env`
+   lokal **dan** ke pengaturan Netlify. Simpan salinannya di tempat aman; tanpa `KUNCI_ENKRIPSI` NIK tidak bisa dibuka lagi.
+2. Dari localhost (MONGODB_URI ke Atlas): `pnpm hibah:seed --tahun 2027` memuat master awal (jenis penerima, checklist,
+   berkas wajib, tujuan bansos, rekening 5.1.05/5.1.06 dari master DANBOY) dan membuat tahun anggaran aktif.
+   Aman dijalankan ulang: hanya menambah yang belum ada.
+3. Super Admin membuat akun Admin Perencana dan Verifikator TAPD di **Pengguna** (Akses DANBOY boleh "Tidak ada").
+   Akun SKPD otomatis menjadi Operator PD.
+4. Admin Perencana mengisi **Tahun dan Jadwal**, **Wilayah** (impor Excel), **Master → Susunan TAPD**,
+   **Riwayat Penerima**, lalu menghubungkan **Google Drive** dengan akun Gmail khusus aplikasi.
+5. Fungsi terjadwal `apps/web/netlify/functions/kirim-berkas.mts` mengirim ulang berkas yang tertunda ke Drive.
+   Periksa **Netlify → Logs → Functions** bila ada berkas yang lama berstatus menunggu.

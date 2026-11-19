@@ -5,7 +5,8 @@ import { COOKIE_MODUL, modulDariAlamat } from './lib/cookie-modul';
 
 const { auth } = NextAuth(authConfig);
 
-const PUBLIK = ['/login', '/api/auth', '/api/kesehatan'];
+// /api/hibah/cron diamankan CRON_SECRET di route-nya sendiri (dipanggil fungsi terjadwal tanpa sesi)
+const PUBLIK = ['/login', '/api/auth', '/api/kesehatan', '/api/hibah/cron'];
 const BOLEH_SAAT_WAJIB_GANTI = ['/ganti-sandi', '/api/akun/ganti-sandi', '/api/auth'];
 const MUTASI = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
