@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useToast } from '@/components/klien';
 import { Tombol } from '@/components/ui';
 import { api, pesanGalat } from '@/lib/klien';
+import { angka } from '@/lib/angka';
 
 /** Muat ulang halaman server setiap 1,5 detik selama verifikasi diproses. */
 export function Pemantau({ aktif }: { aktif: boolean }) {
@@ -41,7 +42,7 @@ export function CentangSipd({ batchId, hasilId, awal, label }: { batchId: string
           setMemuat(true);
           try {
             const r = await api<{ progres: { sisa: number } }>(`/api/verifikasi/${batchId}/hasil/${hasilId}`, { method: 'PATCH', body: { selesai: nilai } });
-            toast(nilai ? (r.progres.sisa ? `Ditandai. Sisa ${r.progres.sisa} subkegiatan.` : 'Ditandai. Semua sudah disesuaikan.') : 'Tanda dibatalkan', nilai ? 'aman' : 'info');
+            toast(nilai ? (r.progres.sisa ? `Ditandai. Sisa ${angka(r.progres.sisa)} subkegiatan.` : 'Ditandai. Semua sudah disesuaikan.') : 'Tanda dibatalkan', nilai ? 'aman' : 'info');
             router.refresh();
           } catch (err) {
             setCentang(!nilai);

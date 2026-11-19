@@ -8,6 +8,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '@/lib/klien';
 import { cx, Masukan } from './ui';
+import { angka } from '@/lib/angka';
 
 /* ---------- Dialog ---------- */
 
@@ -173,7 +174,7 @@ export function LoncengNotifikasi({ tahapanId, awal }: { tahapanId?: string; awa
     return () => clearInterval(t);
   }, [tahapanId]);
   return (
-    <Link href="/notifikasi" className="relative rounded-md p-2 text-redup hover:bg-latar hover:text-teks" aria-label={`Notifikasi, ${n.total} terbuka`}>
+    <Link href="/notifikasi" className="relative rounded-md p-2 text-redup hover:bg-latar hover:text-teks" aria-label={`Notifikasi, ${angka(n.total)} terbuka`}>
       <Bell className="size-4" />
       {n.total > 0 && (
         <span className={cx('angka absolute -right-0.5 -top-0.5 min-w-4 rounded-full px-1 text-center text-[10px] font-bold leading-4 text-white', n.kritis ? 'bg-bahaya' : 'bg-waspada')}>

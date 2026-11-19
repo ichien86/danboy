@@ -7,6 +7,7 @@ import { RiwayatImpor } from '@/components/riwayat-impor';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Masukan, Tabel, TD, TH, Tombol } from '@/components/ui';
 import { konteksHalaman, type SP } from '@/lib/halaman';
 import { FormSumberDana } from './form';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Master Sumber Dana' };
 
@@ -29,7 +30,7 @@ export default async function MasterSumberDana({ searchParams }: { searchParams:
 
   return (
     <>
-      <KepalaHalaman judul="Master sumber dana" sub={`${data.length} sumber dana · tandai "khusus" untuk sumber dana yang wajib sesuai daftar tagging (R5)`} aksi={
+      <KepalaHalaman judul="Master sumber dana" sub={`${angka(data.length)} sumber dana · tandai "khusus" untuk sumber dana yang wajib sesuai daftar tagging (R5)`} aksi={
           kelola ? (
             <>
               <TombolImpor jenis="sumber_dana" label="Impor sumber dana" batasMb={batasUnggahMb()} />

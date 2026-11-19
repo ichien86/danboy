@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { SessionUser } from '@danboy/core';
 import { daftarImpor } from '@danboy/core/services';
 import { StatusBatch, tanggal } from './domain';
+import { angka } from '@/lib/angka';
 
 /** Riwayat impor singkat untuk satu jenis data, ditampilkan di bawah halaman pengelolaan data. */
 export async function RiwayatImpor({ user, jenis, tahapanId, judul = 'Riwayat impor' }: { user: SessionUser; jenis: string | string[]; tahapanId?: string; judul?: string }) {
@@ -15,7 +16,7 @@ export async function RiwayatImpor({ user, jenis, tahapanId, judul = 'Riwayat im
   return (
     <details className="mt-4 rounded-lg border border-garis bg-permukaan">
       <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
-        {judul} <span className="font-normal text-redup">({data.length} terakhir)</span>
+        {judul} <span className="font-normal text-redup">({angka(data.length)} terakhir)</span>
       </summary>
       <ul className="divide-y divide-garis border-t border-garis">
         {data.map((b) => (

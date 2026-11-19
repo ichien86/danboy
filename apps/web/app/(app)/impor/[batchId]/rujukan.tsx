@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Modal, useToast } from '@/components/klien';
 import { Kartu, Tombol, cx } from '@/components/ui';
 import { api, pesanGalat, rp } from '@/lib/klien';
+import { angka } from '@/lib/angka';
 
 interface Rujukan {
   kode: string;
@@ -115,7 +116,7 @@ export function PanelRujukan({
       )}
 
       {beda.length > 0 && (
-        <Kartu padat judul={<span className="text-info">Nama perangkat daerah di SIPD berbeda dengan master ({beda.length})</span>}>
+        <Kartu padat judul={<span className="text-info">Nama perangkat daerah di SIPD berbeda dengan master ({angka(beda.length)})</span>}>
           <p className="border-b border-garis px-4 py-2.5 text-sm text-redup">
             Baris tetap diimpor dan ditautkan menurut kode di master; nama di master tidak diubah. Bila nama di SIPD yang benar, Super Admin
             dapat memperbaikinya di Master → Perangkat Daerah atau mengimpor ulang data perangkat daerah.

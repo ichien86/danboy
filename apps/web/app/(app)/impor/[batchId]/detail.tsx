@@ -8,6 +8,7 @@ import { Modal, useToast } from '@/components/klien';
 import { PanelRujukan, type Izin } from './rujukan';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Peringatan, Statistik, Tabel, TD, TH, Tombol, cx } from '@/components/ui';
 import { api, pesanGalat, rp } from '@/lib/klien';
+import { angka } from '@/lib/angka';
 
 interface Batch {
   _id: string;
@@ -201,7 +202,7 @@ export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: str
       {!berjalan && apbd && typeof r.barisTotal === 'number' && (
         <>
           <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Statistik label="Baris dibaca" nilai={(r.barisTotal as number).toLocaleString('id-ID')} sub={`${r.barisOk} ok · ${r.barisDitahan} ditahan`} nada={(r.barisDitahan as number) ? 'waspada' : undefined} />
+            <Statistik label="Baris dibaca" nilai={(r.barisTotal as number).toLocaleString('id-ID')} sub={`${angka(r.barisOk)} ok · ${angka(r.barisDitahan)} ditahan`} nada={(r.barisDitahan as number) ? 'waspada' : undefined} />
             <Statistik label="Total PAGU file" nilai={rp(r.totalPaguFile as number)} sub={`ok: ${rp(r.totalPaguOk as number)}`} />
             <Statistik label="Subkegiatan di file" nilai={r.jumlahSubkegiatanFile as number} sub={`tersimpan: ${r.jumlahSubkegiatanTersimpan}`} />
             <Statistik
@@ -209,7 +210,7 @@ export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: str
               nilai={totalOp}
               sub={
                 r.operasi
-                  ? `${r.operasi.tambah} baru · ${r.operasi.ubah} ubah · ${r.operasi.tandai_hilang} hilang${typeof r.tidakBerubah === 'number' ? ` · ${r.tidakBerubah} sama (dilewati)` : ''}`
+                  ? `${angka(r.operasi.tambah)} baru · ${angka(r.operasi.ubah)} ubah · ${angka(r.operasi.tandai_hilang)} hilang${typeof r.tidakBerubah === 'number' ? ` · ${angka(r.tidakBerubah)} sama (dilewati)` : ''}`
                   : undefined
               }
             />
@@ -256,7 +257,7 @@ export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: str
           )}
           {Array.isArray(r.subkegiatanTidakAda) && r.subkegiatanTidakAda.length > 0 && (
             <div className="col-span-full">
-              <Peringatan nada="waspada" judul={`Subkegiatan tidak ada di master nomenklatur (${r.subkegiatanTidakAda.length})`}>
+              <Peringatan nada="waspada" judul={`Subkegiatan tidak ada di master nomenklatur (${angka(r.subkegiatanTidakAda.length)})`}>
                 {(r.subkegiatanTidakAda as string[]).slice(0, 30).join(', ')}
                 {r.subkegiatanTidakAda.length > 30 && ` dan ${r.subkegiatanTidakAda.length - 30} lainnya`}. Barisnya ditahan agar tagging tetap
                 terhubung ke nomenklatur. Minta Super Admin melengkapi Master Nomenklatur, lalu klik Proses ulang. Kode penunjang boleh
@@ -381,7 +382,7 @@ export function DetailImpor({ batchId, awal, bolehKelola, izin }: { batchId: str
               {daftar.total > daftar.limit && (
                 <div className="flex items-center justify-between px-4 py-3 text-sm">
                   <span className="text-xs text-redup">
-                    {(page - 1) * daftar.limit + 1}–{Math.min(page * daftar.limit, daftar.total)} dari {daftar.total}
+                    {angka((page - 1) * daftar.limit + 1)}–{angka(Math.min(page * daftar.limit, daftar.total))} dari {angka(daftar.total)}
                   </span>
                   <div className="flex gap-1.5">
                     <Tombol kecil disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>

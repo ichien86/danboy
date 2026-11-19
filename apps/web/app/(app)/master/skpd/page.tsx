@@ -7,6 +7,7 @@ import { RiwayatImpor } from '@/components/riwayat-impor';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Masukan, Tombol } from '@/components/ui';
 import { konteksHalaman, type SP } from '@/lib/halaman';
 import { FormUnit } from './form';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Master SKPD' };
 
@@ -24,7 +25,7 @@ export default async function MasterSkpd({ searchParams }: { searchParams: SP })
   const data = (await daftarSkpd(user, { q: sp.q })) as unknown as (Unit & { subUnit: Unit[] })[];
   return (
     <>
-      <KepalaHalaman judul="Perangkat daerah (SKPD dan sub unit)" sub={`${data.length} SKPD${kelola ? "" : " · dikelola oleh Super Admin"}`}
+      <KepalaHalaman judul="Perangkat daerah (SKPD dan sub unit)" sub={`${angka(data.length)} SKPD${kelola ? "" : " · dikelola oleh Super Admin"}`}
         aksi={
           kelola ? (
             <>

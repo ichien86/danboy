@@ -7,6 +7,7 @@ import { FilterSubkegiatan, siapkanFilter } from '@/components/filter';
 import { DrawerSubkegiatan } from '@/components/subkegiatan';
 import { Kartu, KepalaHalaman, Kosong, Paginasi, TautanTombol, cx } from '@/components/ui';
 import { konteksHalaman, num, TanpaTahapan, type SP } from '@/lib/halaman';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Matriks' };
 
@@ -25,7 +26,7 @@ export default async function Matriks({ searchParams }: { searchParams: SP }) {
     <>
       <KepalaHalaman
         judul="Matriks subkegiatan × sumber dana"
-        sub={`${tahapan.nama} · ${r.total} subkegiatan × ${kolom.length} sumber dana`}
+        sub={`${tahapan.nama} · ${angka(r.total)} subkegiatan × ${angka(kolom.length)} sumber dana`}
         aksi={<TautanTombol href={`/api/ekspor/matriks?${new URLSearchParams(Object.entries({ q: sp.q, skpd: sp.skpd, sumberDana: sp.sumberDana, status: sp.status, jumlahSd: sp.jumlahSd, bedaTagging: sp.bedaTagging, tahapanId: String(tahapan._id) }).filter(([, v]) => v) as [string, string][])}`}>Unduh Excel</TautanTombol>}
       />
       <FilterSubkegiatan user={user} sp={sp} dasar="/matriks" jumlahSd />
@@ -82,7 +83,7 @@ export default async function Matriks({ searchParams }: { searchParams: SP }) {
                     );
                   })}
                   <tr className="sticky bottom-0 z-20 font-semibold">
-                    <td className="sticky left-0 z-30 border-r border-t border-garis bg-latar px-2 py-2">Jumlah ({r.total} subkegiatan, semua halaman)</td>
+                    <td className="sticky left-0 z-30 border-r border-t border-garis bg-latar px-2 py-2">Jumlah ({angka(r.total)} subkegiatan, semua halaman)</td>
                     <td className="angka border-r border-t border-garis bg-latar px-2 py-2 text-right">
                       <Rupiah nilai={r.totalPagu} />
                     </td>

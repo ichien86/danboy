@@ -7,6 +7,7 @@ import { Rupiah, StatusSumberDana } from '@/components/domain';
 import { DrawerSubkegiatan } from '@/components/subkegiatan';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Paginasi, Statistik, Tabel, TD, TH } from '@/components/ui';
 import { konteksHalaman, num, TanpaTahapan, type SP } from '@/lib/halaman';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Sumber Dana' };
 
@@ -47,7 +48,7 @@ export default async function SubkegiatanSumberDana({ params, searchParams }: { 
           <div className="mt-2">{r ? <StatusSumberDana status={r.status} /> : <Lencana>Tidak terpakai</Lencana>}</div>
         </div>
       </div>
-      <Kartu judul={`Subkegiatan pemakai (${daftar.total})`} padat>
+      <Kartu judul={`Subkegiatan pemakai (${angka(daftar.total)})`} padat>
         {daftar.data.length ? (
           <>
             <Tabel>

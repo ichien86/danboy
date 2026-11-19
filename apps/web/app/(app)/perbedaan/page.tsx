@@ -9,6 +9,7 @@ import { DrawerSubkegiatan } from '@/components/subkegiatan';
 import { Kartu, KepalaHalaman, Kosong, Paginasi, Peringatan, cx } from '@/components/ui';
 import { konteksHalaman, num, TanpaTahapan, type SP } from '@/lib/halaman';
 import { TombolIkutSemua } from './tombol';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Perbedaan Sumber Dana' };
 
@@ -39,7 +40,7 @@ export default async function Perbedaan({ searchParams }: { searchParams: SP }) 
     <>
       <KepalaHalaman
         judul="Perbedaan sumber dana vs SIPD"
-        sub={`${tahapan.nama} · ${r.total} subkegiatan menunggu keputusan`}
+        sub={`${tahapan.nama} · ${angka(r.total)} subkegiatan menunggu keputusan`}
         aksi={terbuka && r.total > 0 ? <TombolIkutSemua tahapanId={String(tahapan._id)} jumlah={r.total} query={new URLSearchParams(Object.entries(filter).filter(([, v]) => v) as [string, string][]).toString()} /> : undefined}
       />
       <div className="mb-3">

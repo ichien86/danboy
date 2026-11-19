@@ -9,6 +9,7 @@ import { FilterSubkegiatan, siapkanFilter } from '@/components/filter';
 import { DrawerSubkegiatan } from '@/components/subkegiatan';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Paginasi, Tabel, TD, TH, TautanTombol } from '@/components/ui';
 import { konteksHalaman, num, TanpaTahapan, type SP } from '@/lib/halaman';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Subkegiatan' };
 
@@ -39,7 +40,7 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
     <>
       <KepalaHalaman
         judul="Subkegiatan"
-        sub={`${tahapan.nama} · ${r.total} subkegiatan`}
+        sub={`${tahapan.nama} · ${angka(r.total)} subkegiatan`}
         aksi={
           <>
             {boleh(user, 'impor') && tahapan.status === 'terbuka' && <TautanTombol href="/subkegiatan/tambah">Tambah subkegiatan</TautanTombol>}
@@ -112,7 +113,7 @@ export default async function HalamanSubkegiatan({ searchParams }: { searchParam
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-garis bg-latar font-semibold">
-                  <TD>Jumlah ({r.total} subkegiatan{Object.values(filter).some(Boolean) ? ', sesuai saringan' : ''})</TD>
+                  <TD>Jumlah ({angka(r.total)} subkegiatan{Object.values(filter).some(Boolean) ? ', sesuai saringan' : ''})</TD>
                   <TD />
                   <TD>
                     <span className="flex justify-between gap-3 text-xs">

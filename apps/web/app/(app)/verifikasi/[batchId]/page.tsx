@@ -7,6 +7,7 @@ import { Rupiah, StatusBatch, tanggal } from '@/components/domain';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Masukan, Paginasi, Peringatan, Pilihan, Statistik, Tabel, TD, TH, TautanTombol, Tombol, cx } from '@/components/ui';
 import { konteksHalaman, num, type SP } from '@/lib/halaman';
 import { CekUlang, CentangSipd, HapusVerifikasi, Pemantau } from './klien';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Hasil verifikasi SIPD' };
 
@@ -130,10 +131,10 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
                 <p className="font-medium">
                   {pg.sisa === 0
                     ? 'Semua subkegiatan sudah ditandai disesuaikan di SIPD'
-                    : `${pg.sisa} subkegiatan${skpd ? '' : ' (semua SKPD)'} belum sama sumber dananya dan belum ditandai`}
+                    : `${angka(pg.sisa)} subkegiatan${skpd ? '' : ' (semua SKPD)'} belum sama sumber dananya dan belum ditandai`}
                 </p>
                 <p className="text-sm text-redup">
-                  {pg.ditandai} dari {pg.tidakSesuai} sudah ditandai
+                  {angka(pg.ditandai)} dari {angka(pg.tidakSesuai)} sudah ditandai
                 </p>
               </div>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-latar" role="progressbar" aria-label="Progres penyesuaian" aria-valuenow={pg.ditandai} aria-valuemin={0} aria-valuemax={pg.tidakSesuai}>
@@ -153,7 +154,7 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
 
           {!skpd && (
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Statistik label="Subkegiatan diperiksa" nilai={rk.jumlah ?? 0} sub={`${(rk.barisOk ?? 0).toLocaleString('id-ID')} baris SIPD${rk.barisDitahan ? ` · ${rk.barisDitahan} baris tidak valid` : ''}`} />
+              <Statistik label="Subkegiatan diperiksa" nilai={rk.jumlah ?? 0} sub={`${(rk.barisOk ?? 0).toLocaleString('id-ID')} baris SIPD${rk.barisDitahan ? ` · ${angka(rk.barisDitahan)} baris tidak valid` : ''}`} />
               <Statistik label="Sesuai" nilai={rk.sesuai ?? 0} nada="aman" />
               <Statistik label="Belum sesuai" nilai={rk.tidakSesuai ?? 0} nada={rk.tidakSesuai ? 'bahaya' : 'aman'} />
               <Statistik
@@ -198,13 +199,13 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
                             {s.namaSkpd}
                           </Link>
                         </TD>
-                        <TD kanan>{s.jumlah}</TD>
-                        <TD kanan className={cx('font-semibold', s.tidakSesuai ? 'text-bahaya' : 'text-aman')}>{s.tidakSesuai}</TD>
-                        <TD kanan>{p ? `${p.ditandai}/${p.tidakSesuai}` : '–'}</TD>
-                        <TD kanan>{s.perStatus.sumber_dana_berbeda || '–'}</TD>
-                        <TD kanan>{s.perStatus.nilai_berbeda || '–'}</TD>
-                        <TD kanan>{s.perStatus.tidak_ada_di_sipd || '–'}</TD>
-                        <TD kanan>{s.perStatus.tidak_ada_di_aplikasi || '–'}</TD>
+                        <TD kanan>{angka(s.jumlah)}</TD>
+                        <TD kanan className={cx('font-semibold', s.tidakSesuai ? 'text-bahaya' : 'text-aman')}>{angka(s.tidakSesuai)}</TD>
+                        <TD kanan>{p ? `${angka(p.ditandai)}/${angka(p.tidakSesuai)}` : '–'}</TD>
+                        <TD kanan>{s.perStatus.sumber_dana_berbeda ? angka(s.perStatus.sumber_dana_berbeda) : '–'}</TD>
+                        <TD kanan>{s.perStatus.nilai_berbeda ? angka(s.perStatus.nilai_berbeda) : '–'}</TD>
+                        <TD kanan>{s.perStatus.tidak_ada_di_sipd ? angka(s.perStatus.tidak_ada_di_sipd) : '–'}</TD>
+                        <TD kanan>{s.perStatus.tidak_ada_di_aplikasi ? angka(s.perStatus.tidak_ada_di_aplikasi) : '–'}</TD>
                       </tr>
                     );
                   })}
@@ -216,9 +217,9 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
           {pg.tidakSesuai > 0 && (
             <div className="mb-3 flex flex-wrap gap-1.5 text-sm" role="group" aria-label="Saring tanda">
               {[
-                ['belum', `Belum ditandai (${pg.sisa})`],
-                ['sudah', `Sudah disesuaikan (${pg.ditandai})`],
-                ['semua', `Semua belum sesuai (${pg.tidakSesuai})`],
+                ['belum', `Belum ditandai (${angka(pg.sisa)})`],
+                ['sudah', `Sudah disesuaikan (${angka(pg.ditandai)})`],
+                ['semua', `Semua belum sesuai (${angka(pg.tidakSesuai)})`],
               ].map(([v, l]) => (
                 <Link
                   key={v}
@@ -242,7 +243,7 @@ export default async function HasilVerifikasi({ params, searchParams }: { params
               {(Object.keys(LABEL_STATUS_VERIFIKASI) as StatusVerifikasi[]).map((s) => (
                 <option key={s} value={s}>
                   {LABEL_STATUS_VERIFIKASI[s]}
-                  {!skpd && rk.perStatus ? ` (${rk.perStatus[s]})` : ''}
+                  {!skpd && rk.perStatus ? ` (${angka(rk.perStatus[s])})` : ''}
                 </option>
               ))}
               <option value="">Semua</option>

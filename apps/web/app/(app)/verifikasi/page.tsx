@@ -6,6 +6,7 @@ import { StatusBatch, tanggal } from '@/components/domain';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Paginasi, Peringatan, Tabel, TD, TH } from '@/components/ui';
 import { konteksHalaman, num, TanpaTahapan, type SP } from '@/lib/halaman';
 import { FormVerifikasi } from './form';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Verifikasi SIPD' };
 
@@ -82,10 +83,10 @@ export default async function Verifikasi({ searchParams }: { searchParams: SP })
                               <span className="text-redup">Tidak ada data SKPD Anda di file ini</span>
                             ) : tidakSesuai ? (
                               <Lencana nada="waspada">
-                                {tidakSesuai} dari {jumlah} subkegiatan belum sesuai
+                                {angka(tidakSesuai)} dari {angka(jumlah)} subkegiatan belum sesuai
                               </Lencana>
                             ) : (
-                              <Lencana nada="aman">Semua {jumlah} subkegiatan sesuai</Lencana>
+                              <Lencana nada="aman">Semua {angka(jumlah)} subkegiatan sesuai</Lencana>
                             )
                           ) : b.status === 'gagal' ? (
                             <span className="text-xs text-bahaya">{b.galat}</span>

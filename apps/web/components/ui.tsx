@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { clsx } from 'clsx';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 import { forwardRef } from 'react';
+import { angka } from '@/lib/angka';
 
 export const cx = clsx;
 
@@ -165,7 +166,7 @@ export function Kosong({ judul, children }: { judul: string; children?: ReactNod
 /** Paginasi berbasis tautan; mempertahankan parameter lain di URL. */
 export function Paginasi({ total, page, limit, dasar, param }: { total: number; page: number; limit: number; dasar: string; param: Record<string, string | undefined> }) {
   const halaman = Math.max(1, Math.ceil(total / limit));
-  if (halaman <= 1) return <p className="px-4 py-3 text-xs text-redup">{total} data</p>;
+  if (halaman <= 1) return <p className="px-4 py-3 text-xs text-redup">{angka(total)} data</p>;
   const ke = (p: number) => {
     const sp = new URLSearchParams(Object.entries(param).filter(([, v]) => v) as [string, string][]);
     sp.set('page', String(p));
@@ -174,12 +175,12 @@ export function Paginasi({ total, page, limit, dasar, param }: { total: number; 
   return (
     <nav className="flex items-center justify-between gap-2 px-4 py-3 text-sm" aria-label="Paginasi">
       <span className="text-xs text-redup">
-        {(page - 1) * limit + 1}–{Math.min(page * limit, total)} dari {total}
+        {angka((page - 1) * limit + 1)}–{angka(Math.min(page * limit, total))} dari {angka(total)}
       </span>
       <div className="flex gap-1.5">
         {page > 1 ? <TautanTombol kecil href={ke(page - 1)}>Sebelumnya</TautanTombol> : <Tombol kecil disabled>Sebelumnya</Tombol>}
         <span className="flex items-center px-2 text-xs text-redup">
-          {page} / {halaman}
+          {angka(page)} / {angka(halaman)}
         </span>
         {page < halaman ? <TautanTombol kecil href={ke(page + 1)}>Berikutnya</TautanTombol> : <Tombol kecil disabled>Berikutnya</Tombol>}
       </div>
@@ -191,7 +192,7 @@ export function Statistik({ label, nilai, sub, nada: n }: { label: string; nilai
   return (
     <div className="rounded-lg border border-garis bg-permukaan p-4">
       <p className="text-xs font-medium text-redup">{label}</p>
-      <p className={cx('angka mt-1 text-xl font-semibold', n === 'bahaya' && 'text-bahaya', n === 'waspada' && 'text-waspada', n === 'aman' && 'text-aman')}>{nilai}</p>
+      <p className={cx('angka mt-1 text-xl font-semibold', n === 'bahaya' && 'text-bahaya', n === 'waspada' && 'text-waspada', n === 'aman' && 'text-aman')}>{typeof nilai === 'number' ? angka(nilai) : nilai}</p>
       {sub && <p className="mt-0.5 text-xs text-redup">{sub}</p>}
     </div>
   );

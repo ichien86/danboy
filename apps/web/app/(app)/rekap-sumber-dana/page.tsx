@@ -7,6 +7,7 @@ import { Rupiah, StatusSumberDana } from '@/components/domain';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Tabel, TD, TH, TautanTombol } from '@/components/ui';
 import { konteksHalaman, TanpaTahapan, type SP } from '@/lib/halaman';
 import { FormPagu } from './form-pagu';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Rekap Sumber Dana' };
 
@@ -35,11 +36,11 @@ export default async function RekapSumberDana({ searchParams }: { searchParams: 
       />
       <div className="mb-3 flex flex-wrap gap-1.5 text-sm" role="group" aria-label="Saring status">
         {[
-          ['', `Semua (${r.baris.length})`],
-          ['melebihi', `Melebihi (${r.total.melebihi})`],
-          ['komplit', `Komplit (${r.total.komplit})`],
-          ['mendekati', `Mendekati (${r.total.mendekati})`],
-          ['pagu_belum_diisi', `Pagu belum diisi (${r.total.belumDiisi})`],
+          ['', `Semua (${angka(r.baris.length)})`],
+          ['melebihi', `Melebihi (${angka(r.total.melebihi)})`],
+          ['komplit', `Komplit (${angka(r.total.komplit)})`],
+          ['mendekati', `Mendekati (${angka(r.total.mendekati)})`],
+          ['pagu_belum_diisi', `Pagu belum diisi (${angka(r.total.belumDiisi)})`],
         ].map(([v, l]) => (
           <Link
             key={v}
@@ -95,7 +96,7 @@ export default async function RekapSumberDana({ searchParams }: { searchParams: 
                     <Rupiah nilai={b.sisa} />
                   </TD>
                   <TD kanan>{b.persen === null ? '–' : `${b.persen.toLocaleString('id-ID')}%`}</TD>
-                  <TD kanan>{b.jumlahSubkegiatan}</TD>
+                  <TD kanan>{angka(b.jumlahSubkegiatan)}</TD>
                   <TD>
                     <StatusSumberDana status={b.status} />
                   </TD>

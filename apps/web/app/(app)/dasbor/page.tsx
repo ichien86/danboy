@@ -6,6 +6,7 @@ import { LABEL_ATURAN, Rupiah, StatusSumberDana, StatusTahapan, TingkatNotifikas
 import { Kartu, KepalaHalaman, Kosong, Peringatan, Statistik, Tabel, TD, TH, TautanTombol } from '@/components/ui';
 import { konteksHalaman, TanpaTahapan, type SP } from '@/lib/halaman';
 import { GrafikPagu } from './grafik';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Dasbor' };
 
@@ -61,21 +62,21 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
         </div>
       )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Statistik label="Total pagu subkegiatan" nilai={formatRupiah(a.pagu, { juta: true })} sub={`${a.jumlah} subkegiatan`} />
+        <Statistik label="Total pagu subkegiatan" nilai={formatRupiah(a.pagu)} sub={`${angka(a.jumlah)} subkegiatan`} />
         <Statistik
           label="Total alokasi sumber dana"
-          nilai={formatRupiah(a.alokasi, { juta: true })}
+          nilai={formatRupiah(a.alokasi)}
           sub={selisih === 0 ? 'Seimbang dengan pagu' : `Selisih ${formatRupiah(selisih)}`}
           nada={selisih === 0 ? 'aman' : 'waspada'}
         />
         <Statistik label="Alokasi belum seimbang" nilai={a.tidakSeimbang} sub="subkegiatan (R4)" nada={a.tidakSeimbang ? 'waspada' : 'aman'} />
         {skpd ? (
-          <Statistik label="Sumber dana digunakan" nilai={sdSkpd.length} sub={`${r.perSubUnit.length} sub unit`} />
+          <Statistik label="Sumber dana digunakan" nilai={sdSkpd.length} sub={`${angka(r.perSubUnit.length)} sub unit`} />
         ) : (
           <Statistik
             label="Sumber dana melebihi pagu"
             nilai={r.totalRekap.melebihi}
-            sub={`${r.totalRekap.komplit} komplit · ${r.totalRekap.mendekati} mendekati · ${r.totalRekap.belumDiisi} pagu belum diisi`}
+            sub={`${angka(r.totalRekap.komplit)} komplit · ${angka(r.totalRekap.mendekati)} mendekati · ${angka(r.totalRekap.belumDiisi)} pagu belum diisi`}
             nada={r.totalRekap.melebihi ? 'bahaya' : 'aman'}
           />
         )}
@@ -101,7 +102,7 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
                           {b.nama}
                         </Link>
                       </TD>
-                      <TD kanan>{b.jumlah}</TD>
+                      <TD kanan>{angka(b.jumlah)}</TD>
                       <TD kanan>
                         <Rupiah nilai={b.nilai} />
                       </TD>
@@ -130,7 +131,7 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
           padat
           aksi={
             <Link href="/notifikasi" className="text-xs font-medium text-utama hover:underline">
-              Semua ({notif.total})
+              Semua ({angka(notif.total)})
             </Link>
           }
         >
@@ -174,7 +175,7 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
                 {r.perSubUnit.map((s, i) => (
                   <tr key={i}>
                     <TD>{s.nama}</TD>
-                    <TD kanan>{s.jumlah}</TD>
+                    <TD kanan>{angka(s.jumlah)}</TD>
                     <TD kanan>
                       <Rupiah nilai={s.pagu} />
                     </TD>
@@ -185,7 +186,7 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
                 ))}
                 <tr className="bg-latar font-semibold">
                   <TD>Jumlah</TD>
-                  <TD kanan>{a.jumlah}</TD>
+                  <TD kanan>{angka(a.jumlah)}</TD>
                   <TD kanan>
                     <Rupiah nilai={a.pagu} />
                   </TD>
@@ -251,9 +252,9 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
                 {r.perSkpd.map((s, i) => (
                   <tr key={i}>
                     <TD>{s.nama}</TD>
-                    <TD kanan>{s.jumlah}</TD>
+                    <TD kanan>{angka(s.jumlah)}</TD>
                     <TD kanan>
-                      <Rupiah nilai={s.pagu} juta />
+                      <Rupiah nilai={s.pagu} />
                     </TD>
                   </tr>
                 ))}
@@ -266,13 +267,13 @@ export default async function Dasbor({ searchParams }: { searchParams: SP }) {
         <p className="mt-4 text-sm text-redup">
           {a.beda > 0 && (
             <Link href="/perbedaan" className="text-utama hover:underline">
-              {a.beda} subkegiatan berbeda sumber dana dengan SIPD
+              {angka(a.beda)} subkegiatan berbeda sumber dana dengan SIPD
             </Link>
           )}
           {a.beda > 0 && a.hilang > 0 && ' · '}
           {a.hilang > 0 && (
             <Link href="/subkegiatan?status=tidak_ada_di_impor" className="text-utama hover:underline">
-              {a.hilang} subkegiatan tidak ada di impor terakhir
+              {angka(a.hilang)} subkegiatan tidak ada di impor terakhir
             </Link>
           )}
         </p>

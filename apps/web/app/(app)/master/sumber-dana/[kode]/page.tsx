@@ -6,6 +6,7 @@ import { detailSumberDana } from '@danboy/core/services';
 import { Kartu, KepalaHalaman, Kosong, Lencana, Tabel, TD, TH } from '@/components/ui';
 import { konteksHalaman, num, type SP } from '@/lib/halaman';
 import { FormTagging, HapusTagging } from '../../tagging';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Sumber Dana' };
 
@@ -46,7 +47,7 @@ export default async function DetailSumberDana({ params, searchParams }: { param
       />
       <Kartu
         padat
-        judul={`Daftar subkegiatan tertagging ${tahun} (${tagging.length})`}
+        judul={`Daftar subkegiatan tertagging ${tahun} (${angka(tagging.length)})`}
         aksi={
           <div className="flex items-center gap-2">
             <form method="get" className="flex items-center gap-1.5 text-sm">

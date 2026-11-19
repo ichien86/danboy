@@ -3,7 +3,7 @@
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { rp } from '@/lib/klien';
 
-const juta = (n: number) => `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(n / 1_000_000)} jt`;
+const sumbu = (n: number) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(n);
 
 export function GrafikPagu({ data }: { data: { nama: string; pagu: number; terpakai: number; melebihi: boolean }[] }) {
   return (
@@ -11,7 +11,7 @@ export function GrafikPagu({ data }: { data: { nama: string; pagu: number; terpa
       <ResponsiveContainer>
         <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }} barGap={2}>
           <CartesianGrid horizontal={false} stroke="rgb(var(--garis))" />
-          <XAxis type="number" tickFormatter={juta} tick={{ fontSize: 11, fill: 'rgb(var(--redup))' }} stroke="rgb(var(--garis))" />
+          <XAxis type="number" tickFormatter={sumbu} tick={{ fontSize: 11, fill: 'rgb(var(--redup))' }} stroke="rgb(var(--garis))" />
           <YAxis
             type="category"
             dataKey="nama"

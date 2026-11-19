@@ -7,6 +7,7 @@ import { Kartu, KepalaHalaman, Kosong, Tabel, TD, TH } from '@/components/ui';
 import { konteksHalaman, num, type SP } from '@/lib/halaman';
 import { FormTagging, HapusTagging } from '../../tagging';
 import { FormNomenklatur } from '../form';
+import { angka } from '@/lib/angka';
 
 export const metadata: Metadata = { title: 'Nomenklatur' };
 
@@ -45,7 +46,7 @@ export default async function DetailNomenklatur({ params, searchParams }: { para
         </ol>
       )}
       {d.jenis === 'subkegiatan' && (
-        <Kartu padat judul={`Tagging ${tahun} (${tagging.length})`} aksi={kelola ? <FormTagging tahun={tahun} kodeSubkegiatan={d.kode} /> : undefined}>
+        <Kartu padat judul={`Tagging ${tahun} (${angka(tagging.length)})`} aksi={kelola ? <FormTagging tahun={tahun} kodeSubkegiatan={d.kode} /> : undefined}>
           {tagging.length ? (
             <Tabel>
               <thead>
