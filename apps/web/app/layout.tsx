@@ -4,7 +4,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: { default: 'DANBOY', template: '%s · DANBOY' },
-  description: 'Pemantauan sumber dana APBD per tahapan',
+  description: 'Pemantauan sumber dana APBD serta usulan dan verifikasi hibah dan bansos',
   icons: { icon: '/icon.svg' },
 };
 

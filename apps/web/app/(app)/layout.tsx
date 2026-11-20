@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { hitungNotifikasiTerbuka } from '@danboy/core/services';
 import { semuaTahapan, tahapanAktif, wajibSesi } from '@/lib/sesi';
-import { kerangkaModul, MODUL } from '@/lib/menu';
+import { kerangkaModul } from '@/lib/menu';
 import { LoncengNotifikasi, PemilihTahapan, PencarianCepat, TombolTema } from '@/components/klien';
 import { Kerangka } from '@/components/kerangka';
 
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export default async function LayoutAplikasi({ children }: { children: React.ReactNode }) {
   const user = await wajibSesi();
   // akun tanpa peran DANBOY (mis. Admin Perencana) hanya memakai modul Hibah dan Bansos
-  if (!user.peran) redirect(MODUL.hibah.href);
+  if (!user.peran) redirect('/');
   // daftar tahapan dibaca bersamaan; halaman memakai hasil yang sama (cache per permintaan)
   const [semua, aktif] = await Promise.all([semuaTahapan(), tahapanAktif()]);
   const notif = aktif ? await hitungNotifikasiTerbuka(user, String(aktif._id)) : { total: 0, kritis: 0 };

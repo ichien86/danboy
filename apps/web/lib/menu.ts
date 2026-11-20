@@ -12,8 +12,8 @@ export interface GrupMenu { judul?: string; butir: ButirMenu[] }
 
 export interface InfoModul { kode: Modul; nama: string; sub: string; href: string }
 export const MODUL: Record<Modul, InfoModul> = {
-  danboy: { kode: 'danboy', nama: 'DANBOY', sub: 'Pemantauan Sumber Dana', href: '/dasbor' },
-  hibah: { kode: 'hibah', nama: 'Hibah dan Bansos', sub: 'Usulan dan Verifikasi TAPD', href: '/hibah-bansos' },
+  danboy: { kode: 'danboy', nama: 'Pendanaan', sub: 'Pemantauan sumber dana APBD', href: '/dasbor' },
+  hibah: { kode: 'hibah', nama: 'Hibah dan Bansos', sub: 'Usulan dan verifikasi TAPD', href: '/hibah-bansos' },
 };
 
 type ButirBersyarat = ButirMenu & { tampil: boolean };
@@ -129,11 +129,4 @@ export function kerangkaModul(user: SessionUser, aktif: Modul) {
       peran: aktif === 'hibah' ? (p ? LABEL_PERAN_HIBAH[p] : '') : user.peran ? LABEL_PERAN[user.peran] : '',
     },
   };
-}
-
-/** Alamat awal setelah login atau saat membuka "/": modul dari cookie bila diizinkan, selain itu modul pertama. */
-export function alamatAwal(user: SessionUser, modulCookie?: string | null): string {
-  const izin = modulDiizinkan(user);
-  const m = izin.find((x) => x === modulCookie) ?? izin[0];
-  return m ? MODUL[m].href : '/login';
 }

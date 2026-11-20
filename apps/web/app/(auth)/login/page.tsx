@@ -13,7 +13,7 @@ export default async function HalamanMasuk({ searchParams }: { searchParams: Pro
           <img src="/icon.svg" alt="" className="size-10" />
           <div>
             <h1 className="text-lg font-bold tracking-wide">DANBOY</h1>
-            <p className="text-sm text-redup">Pemantauan sumber dana APBD</p>
+            <p className="text-sm text-redup">Pendanaan · Hibah dan Bansos</p>
           </div>
         </div>
         <div className="rounded-lg border border-garis bg-permukaan p-6">

@@ -16,6 +16,7 @@ import {
   Grid3x3,
   HardDrive,
   History,
+  House,
   LayoutDashboard,
   ListTree,
   Lock,
@@ -67,6 +68,28 @@ const IKON: Record<NamaIkon, ReactNode> = {
   drive: <HardDrive />,
 };
 
+/** Keluar: hapus sesi lalu muat ulang ke halaman login. */
+export function TombolKeluar() {
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        try {
+          await keluar();
+        } catch {
+          /* tetap pindah ke login; middleware akan meminta login lagi bila sesi masih ada */
+        }
+        window.location.assign('/login');
+      }}
+    >
+      <button type="submit" className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-redup hover:bg-latar hover:text-teks">
+        <LogOut className="size-4" aria-hidden />
+        Keluar
+      </button>
+    </form>
+  );
+}
+
 export interface PropsKerangka {
   modul: InfoModul['kode'];
   daftarModul: InfoModul[];
@@ -74,7 +97,7 @@ export interface PropsKerangka {
   pengguna: { nama: string; peran: string };
 }
 
-/** Nama modul aktif; bila akun punya lebih dari satu modul, menjadi tombol untuk berpindah modul. */
+/** Nama modul aktif; tombolnya membuka menu Beranda dan modul lain yang boleh diakses. */
 function PemilihModul({ modul, daftarModul }: Pick<PropsKerangka, 'modul' | 'daftarModul'>) {
   const [buka, setBuka] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -100,7 +123,6 @@ function PemilihModul({ modul, daftarModul }: Pick<PropsKerangka, 'modul' | 'daf
       </div>
     </>
   );
-  if (daftarModul.length < 2) return <div className="flex h-14 items-center gap-2 border-b border-garis px-4">{isi}</div>;
   return (
     <div ref={ref} className="relative border-b border-garis">
       <button
@@ -112,10 +134,15 @@ function PemilihModul({ modul, daftarModul }: Pick<PropsKerangka, 'modul' | 'daf
       >
         {isi}
         <ChevronsUpDown className="size-4 shrink-0 text-redup" aria-hidden />
-        <span className="sr-only">Pilih modul</span>
+        <span className="sr-only">Beranda dan pilih modul</span>
       </button>
       {buka && (
         <div role="menu" className="absolute inset-x-2 top-full z-50 mt-1 rounded-md border border-garis bg-permukaan p-1 shadow-lg">
+          <Link href="/" role="menuitem" onClick={() => setBuka(false)} className="flex items-center gap-2 rounded px-2.5 py-2 text-sm hover:bg-latar">
+            <House className="size-4 text-redup" aria-hidden />
+            <span className="font-medium">Beranda</span>
+          </Link>
+          <div className="my-1 border-t border-garis" />
           {daftarModul.map((m) => (
             <Link
               key={m.kode}
@@ -156,23 +183,9 @@ function Navigasi({ modul, daftarModul, menu, pengguna }: PropsKerangka) {
       <div className="border-t border-garis p-3">
         <p className="truncate text-sm font-medium">{pengguna.nama}</p>
         <p className="text-xs text-redup">{pengguna.peran}</p>
-        <form
-          className="mt-2"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            try {
-              await keluar();
-            } catch {
-              /* tetap pindah ke login; middleware akan meminta login lagi bila sesi masih ada */
-            }
-            window.location.assign('/login');
-          }}
-        >
-          <button type="submit" className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-redup hover:bg-latar hover:text-teks">
-            <LogOut className="size-4" aria-hidden />
-            Keluar
-          </button>
-        </form>
+        <div className="mt-2">
+          <TombolKeluar />
+        </div>
       </div>
     </div>
   );
